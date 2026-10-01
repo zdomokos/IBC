@@ -66,32 +66,35 @@ contribution to the project:
 How to build IBC
 ================
 
-[Apache Ant](http://ant.apache.org/) is required to build IBC.
+IBC is built with [Gradle](https://gradle.org/), using the Gradle wrapper
+included in the repository, so the only thing you need to install is a
+JDK, version 17 or later. The wrapper downloads the right version of Gradle
+the first time you run it.
 
-The repository includes a [build.xml](build.xml) file that defines the
-build process. This build process expects to find an `IBC_BIN` environment
-variable that specifies a folder containing the TWS jar files. This enables
-the compiler to locate the TWS and Gateway entrypoints to give an
-error-free compilation.
+The build expects to find an `IBC_BIN` environment variable that specifies
+a folder containing the TWS jar files. This enables the compiler to locate
+the TWS and Gateway entrypoints to give an error-free compilation. You can
+instead pass the folder on the command line with `-PibcBin=<folder>`.
 
 This folder could be in your TWS installation directory (for example
-C:\Jts\963\jars), or you could create a separate directory and copy the
+C:\JtsE1\jars), or you could create a separate directory and copy the
 jar files into it (this would avoid problems should TWS be uninstalled,
 or a new version installed). Note that it doesn't matter which version
 of TWS you use: package and class names are always the same.
 
-If you're using an IDE, such as NetBeans or Eclipse, to produce a modified
-version of IBC, you'll find it helpful to set the `IBC_BIN` environment
-variable permanently.
+If you're using an IDE, such as IntelliJ IDEA, Eclipse or NetBeans, to
+produce a modified version of IBC, open the folder as a Gradle project and
+set the `IBC_BIN` environment variable permanently.
 
-If you compile directly from the command line then depending on which
-shell you're using you may be able to prefix the command with setting the
-environment variable on the same line. However it's probably still
-preferable to set this permanently, rather than type it out each time you
-build.
+From the repository root (use `gradlew` on Windows, `./gradlew` elsewhere):
 
-Note that the `ver` property in the [build.xml](build.xml) is used in
-generating the file names for the distribution ZIP files, and is also put
-in the [version](resources/version) file which is used by the script
-files.
+    gradlew jar      builds build/libs/IBC.jar
+    gradlew          builds the distribution ZIP files in build/dist, and
+                     updates resources/IBC.jar and resources/version
+    gradlew clean    deletes the build folder
 
+Note that the `version` property in [gradle.properties](gradle.properties)
+is used in generating the file names for the distribution ZIP files, is
+compiled into IBC (the `IbcVersionInfo` class is generated during the
+build), and is also put in the [version](resources/version) file which is
+used by the script files.
