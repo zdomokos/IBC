@@ -23,13 +23,17 @@ gradlew clean    # delete build/
 - Compilation uses `-Xlint:all`. The configuration cache is enabled, so build logic must not touch `project` at execution time.
 - There is no test suite and no linter. The only way to verify a change is to run IBC against a real TWS and Gateway.
 
-User guide PDF: `docs/makedocs/makeUserGuide.bat` (pandoc + xelatex). The source is `docs/userguide.md`.
+User guide PDF: `docs/makedocs/makeUserGuide.ps1` (pandoc + xelatex) builds `docs/userguide.pdf` from `docs/userguide.md`.
+
+## Windows scripts
+
+All Windows scripts in `resources/` are PowerShell 7 (`#Requires -Version 7`, run with `pwsh`); there are no `.bat`/`.vbs` files. `StartTWS.ps1`/`StartGateway.ps1` hold the user's settings in a `$Settings` hashtable and splat it into `scripts/StartIBC.ps1`, which does everything: banner, day-of-week log file, Java/classpath/VM-option discovery, and the restart loop (exit codes 1111/1112, `autorestart` file, `PAUSE<id>`/`COLDRESTART<id>` marker files written by `RestartTask`/`StopTask`). Without `-Inline`, `StartIBC.ps1` re-runs the calling script in a new `pwsh` window with `-Inline -InWindow`. `SendCommand.ps1` talks to the command server over TCP directly; `Stop.ps1` etc. are one-line wrappers. The `.lnk` shortcuts and `Start TWS (autorestart).xml` invoke `pwsh.exe -ExecutionPolicy Bypass -File ...`. The Linux/macOS `.sh` scripts are separate and unchanged.
 
 ## Architecture
 
 `docs/reference/how-ibc-works.md` is the detailed design reference. Read it before making non-trivial changes. `docs/spec/code-review-findings.md` lists known bugs (races, STOP/RESTART issues, command-server security) with a suggested fix order.
 
-**Single process.** IBC is the JVM's main class (`ibcalpha.ibc.IbcTws` or `IbcGateway`, launched by `resources/scripts/StartIBC.bat` / `ibcstart.sh`). It calls TWS's own `main` in-process. IBC can't restart TWS after a crash: if either one exits, so does the other.
+**Single process.** IBC is the JVM's main class (`ibcalpha.ibc.IbcTws` or `IbcGateway`, launched by `resources/scripts/StartIBC.ps1` / `ibcstart.sh`). It calls TWS's own `main` in-process. IBC can't restart TWS after a crash: if either one exits, so does the other.
 
 **Startup** (`IbcTws.load()`): `setupDefaultEnvironment` installs the pluggable singletons, then it starts the command server and shutdown timer, registers the AWT window listener, and launches TWS or Gateway.
 
@@ -46,12 +50,12 @@ User guide PDF: `docs/makedocs/makeUserGuide.bat` (pandoc + xelatex). The source
 
 **Session state.** `SessionManager` tracks Gateway vs TWS vs FIX mode and readiness (`awaitReady`). Many tasks branch on `SessionManager.isGateway()` / `isFIX()`.
 
-**Command server.** `CommandServer` listens on `CommandServerPort` (restricted by `ControlFrom`/`BindAddress`). `CommandDispatcher` handles `STOP`, `RESTART`, `ENABLEAPI`, `RECONNECTDATA`, `RECONNECTACCOUNT`, `PAUSE` and `EXIT`. The `resources/*.bat`/`*.sh` command scripts send these commands.
+**Command server.** `CommandServer` listens on `CommandServerPort` (restricted by `ControlFrom`/`BindAddress`). `CommandDispatcher` handles `STOP`, `RESTART`, `ENABLEAPI`, `RECONNECTDATA`, `RECONNECTACCOUNT`, `PAUSE` and `EXIT`. The `resources/*.ps1`/`*.sh` command scripts send these commands.
 
 ## Contribution constraints (from CONTRIBUTING.md)
 
+- This fork does **not** need backward compatibility with existing IBC installs (the owner's decision), despite CONTRIBUTING.md's backward-compatibility rule. Config and script formats may change freely.
 - Java code must stay cross-platform (Windows, Linux, macOS) and work for both TWS and Gateway.
-- Backward compatibility: an existing user's `config.ini` and scripts must keep working unchanged. New settings need defaults that preserve current behaviour.
 - Never bypass IB's login security, such as 2FA or security-code entry.
 - Match the existing code style.
 - `resources/scripts/` holds launcher internals that end users don't edit. User-facing changes belong in `config.ini`, the top-level start scripts and the user guide.

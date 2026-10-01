@@ -13,7 +13,7 @@ screen scraping, synthetic mouse input, OS accessibility APIs or reflection.
 ## 1. Process model: IBC and TWS share one JVM
 
 ```
-StartIBC.bat / ibcstart.sh
+StartIBC.ps1 / ibcstart.sh
         │  java -cp <IBC jar>;<TWS jars> ... ibcalpha.ibc.IbcTws  <config.ini> [mode]
         ▼
 ┌──────────────────────────── one JVM ────────────────────────────┐
@@ -27,7 +27,7 @@ StartIBC.bat / ibcstart.sh
 
 - The start scripts launch `java` with IBC's class as the entry point:
   `ibcalpha.ibc.IbcTws` for TWS, `ibcalpha.ibc.IbcGateway` for the Gateway
-  (`resources/scripts/StartIBC.bat:105-106`). The TWS jars are on the classpath.
+  (`resources/scripts/StartIBC.ps1`, `$entryPoint`). The TWS jars are on the classpath.
 - After initialising, IBC starts TWS by calling its `main` directly:
   - TWS: `jclient.LoginFrame.main(twsArgs)` (`IbcTws.java:516`)
   - Gateway: `ibgateway.GWClient.main(twsArgs)` (`IbcTws.java:474`)
@@ -272,7 +272,7 @@ Optional, enabled by `CommandServerPort` (0 = off).
 
 - Replies: `OK <info>`, `ERROR <info>`, optional `INFO <info>` (hidden unless
   `SuppressInfoMessages=no`), and an optional `CommandPrompt`.
-- `resources/scripts/SendIBCCommand.vbs` is a sample client.
+- `resources/SendCommand.ps1` (Windows) and `resources/commandsend.sh` (Unix) are sample clients.
 
 ## 9. Diagnostics: window structure logging
 

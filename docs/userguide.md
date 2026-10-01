@@ -117,7 +117,7 @@ up and running properly.
 
 8. Check that the correct major version number for TWS is set in the shell
    script files in the IBC installation folder: these files are
-   `StartTWS.bat` and `StartGateway.bat` on Windows, `twsstart.sh` and
+   `StartTWS.ps1` and `StartGateway.ps1` on Windows, `twsstart.sh` and
    `gatewaystart.sh` on Unix, `twsstartmacos.sh` and `gatewaystartmacos.sh`
    on macOS. 
    
@@ -138,14 +138,16 @@ up and running properly.
    includes the period in the install folder name).
 
    Now open the script files with a text editor and ensure that the
-   TWS_MAJOR_VRSN variable is set correctly.
+   TWS major version is set correctly: this is the `TwsMajorVersion` setting
+   on Windows, and the TWS_MAJOR_VRSN variable on Unix and macOS.
 
 9. At this stage, everything is set up to run IBC with its default
    settings, which will start TWS and attempt to log it into your
    paper-trading user. It is worthwhile doing this to check that everything
    works before further customising it to suit your needs. To do this, run the
-   relevant shell script (`StartTWS.bat` on Windows, `twsstart.sh` on
+   relevant script (`StartTWS.ps1` on Windows, `twsstart.sh` on
    Unix, `twsstartmacos.sh` on macOS) from the IBC installation folder.
+   On Windows the simplest way is to use the `IBC (TWS)` shortcut.
    If everything is satisfactory, shut down IBC by closing TWS in the
    usual way.
 
@@ -272,8 +274,10 @@ The distribution ZIP file contains:
 * Top-level script files that run IBC to start TWS or the Gateway. These files
  are specific to the platform (ie Windows, Linux or macOS) to which the
  ZIP file relates
-* Windows script files that can be used to tidily shut down or restart TWS or
+* Script files that can be used to tidily shut down or restart TWS or
  Gateway from the same or another computer.
+* On Windows, shortcuts called `IBC (TWS)` and `IBC (Gateway)` that run the
+ start scripts
 * A sample Windows Task Scheduler file (named similar to
 `Start TWS Live (daily).xml`), which can be used to automate starting TWS
  or Gateway on Windows systems (not present in the Linux and macOS ZIPs)
@@ -287,11 +291,21 @@ they are freely available from the
 
 ### Installing IBC
 
-Before you install, note that if you're running on Windows, you'll need to
-unblock the zip file to avoid annoying messages when you later try to run
-the .BAT script files. To do this, right click on the .zip file in Flle
-Explorer, select 'Properties' from the context menu, set the 'Unblock'
-check box on the 'General' tab, and click 'OK'.
+On Windows, the IBC scripts are PowerShell scripts (`.ps1` files), which
+need PowerShell 7 (`pwsh`). If you don't already have it, you can install it
+with this command:
+
+```
+winget install Microsoft.PowerShell
+```
+
+Before you install IBC, note that if you're running on Windows, you'll need
+to unblock the zip file, otherwise PowerShell will refuse to run the scripts
+when you run them from a PowerShell prompt. To do this, right click on the
+.zip file in File Explorer, select 'Properties' from the context menu, set
+the 'Unblock' check box on the 'General' tab, and click 'OK'. (If you've
+already extracted the files, you can instead run
+`Get-ChildItem C:\IBC -Recurse | Unblock-File` in PowerShell.)
 
 Installing IBC is just a matter of extracting the contents of the
 downloaded ZIP file to wherever you want to install it. 
@@ -486,21 +500,24 @@ There are two ways that IBC can locate your edited `config.ini` file.
 
 ### Starting IBC
 
-The normal way to start IBC is by use of a shell script. These can be
-identified by the `.bat` (Windows) or `.sh` (Unix) extensions. Scripts
+The normal way to start IBC is by use of a script. These can be
+identified by the `.ps1` (Windows) or `.sh` (Unix) extensions. Scripts
 to start TWS and Gateway are included in the distribution ZIPs, and due to
 their complexity you are strongly advised to use them, rather than try to
 create your own.
 
-Windows users can execute a shell script in a number of ways, including:
+Windows users can run a start script in a number of ways, including:
 
-* Double-click the filename in Windows Explorer
-* Create a shortcut to it on your Start menu, desktop or taskbar
+* Double-click the `IBC (TWS)` or `IBC (Gateway)` shortcut in the IBC
+  installation folder. (Note that double-clicking a `.ps1` file itself
+  normally opens it in a text editor rather than running it.)
+* Copy these shortcuts to your Start menu, desktop or taskbar
+* Run it from a PowerShell 7 prompt, for example `C:\IBC\StartTWS.ps1`
 * Create a scheduled task to run it automatically at the required times (see
   below for more information about using scheduled tasks)
 
 If you used the default locations to install IBC and TWS, and to store your
-config.ini file, you should not need to edit the shell scripts. If you do need
+config.ini file, you should not need to edit the scripts. If you do need
 to change them, they are commented to help you.
 
 ## Other Topics
@@ -543,19 +560,26 @@ This behaviour is controlled by the
 `SecondFactorAuthenticationExitInterval` setting, which is the number of
 seconds IBC waits for login to complete when the user has acknowledged the
 alert, after which IBC closes down. For automatic restart, you must also
-set the `TWOFA_TIMEOUT_ACTION` variable in your start script file to `restart`
-(see the notes for this variable in the relevant start script).
+set the `On2FATimeout` setting (Windows) or the `TWOFA_TIMEOUT_ACTION` variable
+(Unix and macOS) in your start script file to `restart` (see the notes for this
+setting in the relevant start script).
 
 If you have another automatic means of restarting IBC after it closes (for
 example Task Scheduler on Windows), then you should consider setting the
-`TWOFA_TIMEOUT_ACTION` variable in your start script to `exit`, to avoid
+`On2FATimeout` setting (Windows) or `TWOFA_TIMEOUT_ACTION` variable (Unix and
+macOS) in your start script to `exit`, to avoid
 the situation where both mechanisms react at the same time.
 
 
 ### Scheduled Tasks (Windows only)
 
 On Windows you can start IBC automatically using the Task Scheduler to run
-`StartTWS.bat` or `StartGateway.bat`.
+`StartTWS.ps1` or `StartGateway.ps1`. The task's action should run the program
+`C:\Program Files\PowerShell\7\pwsh.exe` with arguments like these:
+
+```
+-NoProfile -ExecutionPolicy Bypass -File "C:\IBC\StartTWS.ps1" -Inline
+```
 
 When you define your task, make sure that the option to 'Run only when user
 is logged on' is selected. Doing this will ensure that you can see and interact
@@ -587,7 +611,7 @@ You can set the AutoRestart time in the Lock and Exit section of the
 configuration dialog: this causes TWS/Gateway to automatically shut down and
 restart without requiring re-authentication at the specified time. When the
 restart time is reached, TWS shuts down (and IBC with it), but this does not
-end the task, because the `StartTWS.bat` or `StartGateway.bat` script continues
+end the task, because the `StartTWS.ps1` or `StartGateway.ps1` script continues
 running to restart IBC. The restarted IBC then reloads TWS with the relevant
 information needed for it to recover its previous session without re-
 authentication. This sequence is then repeated each day at the same time. Thus
@@ -620,14 +644,14 @@ outage. (Information about how to make your computer log on automatically is
 easily available on the internet: but make sure you understand the security
 implications of autologon to Windows).
 
-**IMPORTANT** Make sure you use the `/INLINE` argument to `StartTWS.bat` or
-`StartGateway.bat` when starting IBC from Task Scheduler. Otherwise IBC starts
+**IMPORTANT** Make sure you use the `-Inline` argument to `StartTWS.ps1` or
+`StartGateway.ps1` when starting IBC from Task Scheduler. Otherwise IBC starts
 and runs correctly, but Task Scheduler is not aware of it: in particular Task
 Scheduler does not show the task as running. This prevents correct operation of
 Task Scheduler features such as killing the task after a specified elapsed
 time, and periodic restarts as described above will result in multiple IBC
 instances being started, with unpredictable results. The reason for this is
-that if `/INLINE` is not used, the start scripts create a new window to run
+that if `-Inline` is not used, the start scripts create a new window to run
 IBC in, and Task Scheduler is not aware of this, so the task ends as soon as
 this new window has been created.
 
@@ -642,7 +666,7 @@ console, rather than examining the xml file.
 
 * The task starts TWS on Sunday at 22:15 (there is nothing special about this
 time: choose whatever is convenient for you). As far as Task Scheduler is
-concerned, the task is the instantiation of the StartTWS.bat script (rather
+concerned, the task is the instantiation of the StartTWS.ps1 script (rather
 than the instantiation of IBC by the script), and when auto-restart is
 configured the script instantiation persists right through the various auto-
 restarts until TWS is shut down without auto-restart. Thus once the task is
@@ -755,7 +779,8 @@ time. So you can run multiple TWS instances with no problem provided each
 instance is logged in to a different username, AND you don't try to run them
 at the same time.
 
-However, by using the `TWS_SETTINGS_PATH` setting in the TWS and Gateway start
+However, by using the `TwsSettingsPath` setting (Windows) or `TWS_SETTINGS_PATH`
+variable (Unix and macOS) in the TWS and Gateway start
 scripts, you can tell TWS to store its settings whereever you like. So to have
 multiple IBC instances operating simultaneously, you need to create a separate
 start script for each instance with a different setting for
@@ -795,15 +820,14 @@ So:
   `IbDir=C:\\JtsLive` and `IbDir=C:\\JtsPaper`, and set the `IbLoginId`
   and `IbPassword` to the live or paper account values as appropriate
 
-- create two start scripts (by copying `StartTWS.bat`) called
-  `StartTWSLive.bat` and `StartTWSPaper.bat`
+- create two start scripts (by copying `StartTWS.ps1`) called
+  `StartTWSLive.ps1` and `StartTWSPaper.ps1`
 
-- change the `set CONFIG=...` line in each script file to refer to the
+- change the `Config` setting in each script file to refer to the
   relevant configuration file
 
-- change the `set LOG_PATH=...` line in each script file to refer to different
-  folders, for example `set LOG_PATH=%IBC_PATH%\LiveLogs` and
-  `set LOG_PATH=%IBC_PATH%\PaperLogs`
+- change the `LogPath` setting in each script file to refer to different
+  folders, for example `C:\IBC\LiveLogs` and `C:\IBC\PaperLogs`
 
 - now you can run the new scripts, and each will start a separate instance of
   TWS connected to a different account, with its settings stored in separate
@@ -819,7 +843,8 @@ place the relevant files in separate folders named according to the version
 number.
 
 Then follow the advice in the previous section and ensure that each script
-file has the correct value for the `TWS_MAJOR_VRSN` variable.
+file has the correct value for the `TwsMajorVersion` setting (Windows) or the
+`TWS_MAJOR_VRSN` variable (Unix and macOS).
 
 
 ### How to run TWS/Gateway without IBC when IBC is installed
@@ -873,11 +898,14 @@ The source may send more than one consecutive command. When it is finished, it
 should send an EXIT command (though this is not necessary after a STOP command
 since that closes the socket automatically). 
 
-A simple way to use the command server is to make use of the `telnet` operating
-system command. Simple scripts are provided in the download zip for each of the
-commands. To use these commands, you should first edit the SendCommand.bat (for
-Windows) or commandsend.sh (for Unix) files to ensure the IP address and port
-number are correct.
+Simple scripts are provided in the download zip for each of the commands (for
+example `Stop.ps1` on Windows, `stop.sh` on Unix). On Windows these use
+`SendCommand.ps1`, which connects to the command server directly and displays
+IBC's reply; on Unix they use the `telnet` operating system command via
+`commandsend.sh`. To use these scripts, you should first edit `SendCommand.ps1`
+(for Windows) or `commandsend.sh` (for Unix) to ensure the IP address and port
+number are correct. On Windows you can also pass them when running the
+script, for example `.\Stop.ps1 -Server 192.168.1.20 -Port 7462`.
 
 The available commands are listed below. Note that none of these commands have
 any parameters.
@@ -1030,9 +1058,9 @@ Here are the main differences between IBC and IBController:
 
    On Windows:
 
-       IBControllerStart.bat 				-> 	StartTWS.bat
-	   IBControllerGatewayStart.bat 		-> 	StartGateway.bat
-       IBControllerStop.bat 				-> 	Stop.bat
+       IBControllerStart.bat 				-> 	StartTWS.ps1
+	   IBControllerGatewayStart.bat 		-> 	StartGateway.ps1
+       IBControllerStop.bat 				-> 	Stop.ps1
 	
    On Linux:
 

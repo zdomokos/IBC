@@ -97,11 +97,11 @@ val distWin = registerDistZip("Win") {
 }
 
 val distLinux = registerDistZip("Linux") {
-    exclude("**/*.bat", "**/*.vbs", "**/*macos.sh", "**/*.xml", "**/IBC (*", "**/*.plist", "**/*.ps1")
+    exclude("**/*.ps1", "**/*macos.sh", "**/*.xml", "**/IBC (*", "**/*.plist")
 }
 
 val distMacos = registerDistZip("Macos") {
-    exclude("**/*.bat", "**/*.vbs", "**/*.xml", "**/IBC (*", "**/*.ps1")
+    exclude("**/*.ps1", "**/*.xml", "**/IBC (*")
     // the Linux start scripts; the macOS ones are twsstartmacos.sh and gatewaystartmacos.sh
     exclude("twsstart.sh", "gatewaystart.sh")
 }
