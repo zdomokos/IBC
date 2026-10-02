@@ -1,171 +1,122 @@
-## PROJECT RETIREMENT
+# IBC
 
->**This project has been retired, as of 1 September 2026. By 'retired', I mean that
-there will be no further development of IBC, other than completing work in progress
-at that date and fixing any significant newly reported bugs.**
->
->**Nor will IBC be actively supported on this repository.**
+IBC automates the parts of running Interactive Brokers' Trader Workstation (TWS) and IB Gateway
+that would otherwise need someone at the keyboard. It fills in the login dialog, handles the
+dialogs TWS pops up, restarts TWS daily without re-authenticating, and accepts commands such as
+STOP and RESTART over a TCP port. It runs on Windows, Linux and macOS.
 
->See [Discussion 347](https://github.com/IbcAlpha/IBC/discussions/347) for the
->reasons for this. If you have any queries regarding this, or you need to report new
->bugs, please post them on the [IBC User Group](https://groups.io/g/ibcalpha). Please
->do not submit requests for further enhancements to the User Group.
+This repository is a fork of [IbcAlpha/IBC](https://github.com/IbcAlpha/IBC), which was retired
+on 1 September 2026 and is now archived. Compared with upstream, this fork:
 
->This project repository has been archived. All the repository data is preserved intact,
->but it is read-only: so no new issues, pull requests, discussions or comments can be
->added.
+- builds with Gradle instead of Ant, and
+- uses PowerShell 7 scripts on Windows instead of `.bat` and VBScript files.
 
->However you can still download releases, and fork the project should you wish to
->carry it forward yourself.
+It does not keep backward compatibility with existing IBC installations: config and script
+formats may change. The upstream README is kept in
+[docs/upstream-README.md](docs/upstream-README.md).
 
->It is intended to produce a final release that clears all outstanding issues.
->This may take some time, and may involve interim releases. 
+IBC only works with the **offline** (standalone) TWS installer, not the self-updating TWS.
 
->Thanks to all who have engaged with IBC (and its predecessor IBController) over the past
-> 23 years
+## Repository layout
 
-<br><br>
+| Path | Contents |
+|------|----------|
+| `src/ibcalpha/ibc/` | the Java source (single package) |
+| `resources/` | everything that goes into the distribution ZIPs: `config.ini`, start and command scripts, `IBC.jar`, `version` |
+| `resources/scripts/` | launcher internals called by the start scripts |
+| `docs/` | user guide and design notes (see [Documentation](#documentation)) |
+| `samples/IbcLoader/` | example of running IBC and TWS inside your own Java application |
 
-**Download the
-[latest official release here](https://github.com/IbcAlpha/IBC/releases/latest)**
+## Building
 
-IBC automates many aspects of running [Interactive Brokers](https://www.interactivebrokers.com) [Trader Workstation and Gateway](https://www.interactivebrokers.com/en/index.php?f=14099#tws-software)
-that would otherwise involve manual intervention. It's especially useful for
-those who run automated trading systems based on the [Interactive Brokers API](http://interactivebrokers.github.io),
-but many manual traders find it helpful as well.
+You need:
 
-Here are some of the things it will do for you:
+- **A JDK, version 17 or later.** Gradle is downloaded automatically by the included wrapper.
+- **The TWS jar files.** IBC compiles against TWS's own classes, so point the build at the
+  `jars` folder of any installed TWS or Gateway version (package and class names don't change
+  between versions). Either set the `IBC_BIN` environment variable or pass `-PibcBin=<folder>`.
 
-* It automatically fills in your username and password in the Login
-dialog when TWS or Gateway start running, and clicks the Login button
-* It can ensure that while a TWS/Gateway session is running, attempts to
-logon from another computer or device do not succeed
-* It can participate in Two Factor Authentication using IBKR Mobile in such
-a way that users who miss the 2FA alert on their device will automatically
-have further opportunities without needing to be at the computer
-* It handles various dialog boxes which TWS sometimes displays, to keep
-things running smoothly with no user involvement
-* It allows TWS and Gateway to be auto-restarted each day during the week,
-without the user having to re-authenticate
-* It allows TWS and Gateway to be shut down at a specified time every day
-* It allows TWS to be shut down at a specified time on a specified day
-of the week
-* It can be remotely instructed to shut down TWS or Gateway, which can
-be useful if they are running in the cloud or on an inaccessible computer
+```powershell
+[Environment]::SetEnvironmentVariable("IBC_BIN", "C:\Jts\1051\jars", "User")
+```
 
-IBC runs on Windows, macOS and Linux.
+Then, from the repository root (`./gradlew` on Linux and macOS):
 
-> IMPORTANT NOTICES
->
-> Please note that IBC cannot automatically complete your login if
-Interactive Brokers have given you a card or device that you must use
-during login. IBC can still enter your username and password, but you
-will have to type in the relevant code, or use the IBKR Mobile app to
-complete the login. You can request Interactive Brokers (via your
-Account Management page on their website) to relax this requirement
-when logging in to TWS or Gateway, but you will lose certain guarantees
-should you suffer losses as a result of your account being compromised.
->
-> If you're moving to IBC from IBController, there are some changes
-that you'll have to make. See the [IBC User Guide](userguide.md) for
-further information.
->
-> No guarantee is given that this repository will be in a fully
-self-consistent state at all times. In particular, if you build IBC.jar
-directly from this repository, you should test thoroughly before
-deploying it (an example of this might be when composing a Docker image).
+| Command | Result |
+|---------|--------|
+| `gradlew jar` | compiles and writes `build/libs/IBC.jar` |
+| `gradlew` | the default `dist` task: also copies the jar to `resources/IBC.jar`, writes `resources/version`, and builds `build/dist/IBCWin-<version>.zip`, `IBCLinux-<version>.zip` and `IBCMacos-<version>.zip` |
+| `gradlew clean` | deletes `build/` |
 
+Notes:
 
-Downloads
----------
+- The version number is set only in [gradle.properties](gradle.properties). It is compiled into
+  IBC and used for the ZIP names and `resources/version`.
+- `resources/IBC.jar` is a committed file. `gradlew` (dist) overwrites it, so expect it to show
+  as modified afterwards.
+- There are no automated tests. Check changes by running IBC against a real TWS and Gateway.
 
-If you just want to use IBC without modifying it, you should download
-the latest official release ZIP which you can find
-[here](https://github.com/IbcAlpha/IBC/releases/latest). Note that
-there are separate release files for Windows, macOS and Linux.
+To rebuild the user guide PDF (`docs/userguide.pdf`) you also need pandoc and xelatex (for
+example MiKTeX): run `docs/makedocs/makeUserGuide.ps1`.
 
-Users who want to make changes to IBC should clone this repository
-in the usual way.
+## Releasing
 
-User Guide
-----------
+There is no release automation. A release is a set of three ZIP files attached to a GitHub
+release:
 
-Please see the [IBC User Guide](userguide.md) for installation and
-usage instructions. The User Guide is also included as a PDF file in the
-download ZIPs.
+1. **Set the version** in [gradle.properties](gradle.properties).
+2. **Update the documentation** if behaviour or settings changed:
+   [docs/userguide.md](docs/userguide.md) and the comments in
+   [resources/config.ini](resources/config.ini). Rebuild the PDF with
+   `docs/makedocs/makeUserGuide.ps1`.
+3. **Build:** `gradlew clean dist`.
+4. **Test the ZIPs** from `build/dist/` on a clean install of each platform you're releasing for,
+   with both TWS and Gateway: log in, auto-restart, and the STOP/RESTART commands.
+5. **Commit** `gradle.properties`, `resources/IBC.jar` and `resources/version` (plus any doc
+   changes), then tag the commit with the version number:
 
-Support
--------
+   ```
+   git tag <version>
+   git push origin master <version>
+   ```
 
-> IMPORTANT
-> By far the most common problem that users have when setting up IBC
-is the result of trying to use it with the self-updating version of TWS.
->
->**IBC DOES NOT WORK with the self-updating version of TWS.**
->
->You must install the offline version of TWS for use with IBC.
->
->Note however that there is no self-updating version of the Gateway, so the
-normal Gateway installer will work fine if you only want to use the Gateway.
+6. **Publish:** create a GitHub release from the tag and attach the three ZIPs from
+   `build/dist/`, either in the GitHub web UI or with the GitHub CLI:
 
-If you need assistance with running IBC, or have any queries or suggestions
-for improvement, you should join the [IBC User Group](https://groups.io/g/ibcalpha).
+   ```
+   gh release create <version> build/dist/*.zip --title "IBC <version>" --notes "<release notes>"
+   ```
 
-If you're convinced you've found a bug in IBC, please report it via either
-the
-[IBC User Group](https://groups.io/g/ibcalpha) or the
-[GitHub Issue Tracker](https://github.com/IbcAlpha/IBC/issues).
-Please provide as much evidence as you can, especially the versions of IBC
-and TWS/Gateway you're using and a full description of the incorrect
-behaviour you're seeing.
+## Installing and running
 
-Note that IBC creates a log file that records a lot of useful information
-that can be very helpful in diagnosing users' problems. The location of
-this log file is prominently displayed in the window that appears when you
-run IBC. Please attach this log file to any problem reports.
+See the [user guide](docs/userguide.md) ([PDF](docs/userguide.pdf)). In short: extract the ZIP
+for your platform (on Windows, to `C:\IBC`), copy `config.ini` to a private folder and fill in
+your credentials, set the TWS major version in the start script, and run it:
 
-Contributing
-------------
+- **Windows:** `StartTWS.ps1` or `StartGateway.ps1`, or the `IBC (TWS)` / `IBC (Gateway)`
+  shortcuts. These need [PowerShell 7](https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows)
+  (`winget install Microsoft.PowerShell`).
+- **Linux:** `twsstart.sh` or `gatewaystart.sh`.
+- **macOS:** `twsstartmacos.sh` or `gatewaystartmacos.sh`.
 
-There are several ways you may be able to contribute to IBC's ongoing
-development and support. Please read the
-[contributor guidelines](CONTRIBUTING.md), and send us a
-[pull request](../../pulls).
+## Documentation
 
-We also thank past contributors to the IBController project from which
-IBC was forked: Richard King, Steven Kearns, Ken Geis, Ben Alex and
-Shane Castle.
+| Document | What it covers |
+|----------|----------------|
+| [docs/userguide.md](docs/userguide.md) | installing, configuring and running IBC; all settings; the command server |
+| [resources/config.ini](resources/config.ini) | every configuration setting, with comments |
+| [docs/reference/how-ibc-works.md](docs/reference/how-ibc-works.md) | how IBC drives TWS from inside the same JVM: window handlers, threading, key flows |
+| [docs/reference/tws-jvm-parameters.md](docs/reference/tws-jvm-parameters.md) | how IBC reproduces the JVM settings that `tws.exe` uses, and how to check them |
+| [docs/spec/code-review-findings.md](docs/spec/code-review-findings.md) | known bugs in the Java code, with a suggested fix order |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | contribution guidelines and build details |
+| [CLAUDE.md](CLAUDE.md) | condensed build and architecture notes for AI coding assistants |
+| [docs/upstream-README.md](docs/upstream-README.md) | the original upstream README, kept for history |
+| [samples/IbcLoader/README.md](samples/IbcLoader/README.md) | running IBC inside your own Java application |
 
-License
--------
+## License
 
-IBC is licensed under the
-[GNU General Public License](http://www.gnu.org/licenses/gpl.html) version 3.
+IBC is licensed under the [GNU General Public License version 3](LICENSE.txt).
 
-History
--------
-
-A brief note by Richard L King (rlktradewright on GitHub) updated
-5 April 2019.
-
-IBC is a fork of the original
-[IBController project](https://github.com/ib-controller/ib-controller).
-For many years, from 2004 to early 2018, I was the primary
-maintainer, developer and supporter for that project.
-
-For reasons beyond my control, in early 2018 I decided to withdraw my direct
-support for the original project, and to create this fork. It is my intention
-to ensure that this fork continues to be developed and supported to the high
-standards of the past.
-
-The status of the original IBController repository now seems unclear, so
-IBController users are invited to switch to IBC.
-
-If you switch from IBController to IBC, please note that there are some
-significant differences, and it's best to install IBC from scratch using
-the download on the [Releases page](https://github.com/IbcAlpha/IBC/releases).
-The last section of the [IBC User Guide](userguide.md) contains useful
-information about these differences.
-
-
-
+IBC is a fork of the [IBController](https://github.com/ib-controller/ib-controller) project.
+Thanks to its contributors, and to Richard L King, who maintained IBController and then created
+and maintained IBC.
