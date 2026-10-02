@@ -56,7 +56,7 @@
   <Actions Context="Author">
     <Exec>
       <Command>C:\Program Files\PowerShell\7\pwsh.exe</Command>
-      <Arguments>-NoProfile -ExecutionPolicy Bypass -File "C:\IBC\StartTWS.ps1" -Inline</Arguments>
+      <Arguments>-NoProfile -ExecutionPolicy Bypass -File "C:\IBC\ibc.ps1" start -Inline</Arguments>
       <WorkingDirectory>C:\IBC</WorkingDirectory>
     </Exec>
   </Actions>

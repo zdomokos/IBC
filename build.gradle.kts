@@ -15,12 +15,14 @@ dependencies {
     if (ibcBin != null) compileOnly(fileTree(ibcBin) { include("**/*.jar") })
 }
 
+val ibcVersion = project.version.toString()
+
 // Generate IbcVersionInfo from the version in gradle.properties
 val generateVersionInfo = tasks.register("generateVersionInfo") {
-    val ver = project.version.toString()
     val outDir = layout.buildDirectory.dir("generated/sources/version")
-    inputs.property("version", ver)
+    inputs.property("version", ibcVersion)
     outputs.dir(outDir)
+    val ver = ibcVersion
     doLast {
         val file = outDir.get().file("ibcalpha/ibc/IbcVersionInfo.java").asFile
         file.parentFile.mkdirs()
@@ -39,9 +41,7 @@ val generateVersionInfo = tasks.register("generateVersionInfo") {
 
 sourceSets {
     main {
-        java.setSrcDirs(listOf("src"))
         java.srcDir(generateVersionInfo)
-        resources.setSrcDirs(emptyList<String>())
     }
 }
 
@@ -61,53 +61,22 @@ tasks.jar {
     archiveFileName = "IBC.jar"
 }
 
-// The distribution ZIPs contain the files in resources/, so keep the committed
-// resources/IBC.jar and resources/version up to date, as the Ant build did
-val updateResources = tasks.register<Copy>("updateResources") {
-    description = "Copies IBC.jar into resources/ and writes resources/version."
-    val ver = project.version.toString()
-    val versionFile = layout.projectDirectory.file("resources/version")
-    inputs.property("version", ver)
-    outputs.file(versionFile)
+// The Windows distribution: IBC.jar, the files in src/main/dist and the licence.
+// The version is stamped into ibc.ps1 ('ibc.ps1 version').
+val dist = tasks.register<Zip>("dist") {
+    group = "distribution"
+    description = "Builds IBC.jar and the Windows distribution ZIP."
+    archiveFileName = "IBC-$ibcVersion-windows.zip"
+    destinationDirectory = layout.buildDirectory.dir("dist")
+    inputs.property("ibcVersion", ibcVersion)
     from(tasks.jar)
-    into(layout.projectDirectory.dir("resources"))
-    doLast {
-        versionFile.asFile.writeText(ver)
-    }
-}
-
-fun registerDistZip(platform: String, configure: CopySpec.() -> Unit) =
-    tasks.register<Zip>("dist$platform") {
-        group = "distribution"
-        description = "Builds the $platform distribution ZIP."
-        dependsOn(updateResources)
-        archiveFileName = "IBC$platform-${project.version}.zip"
-        destinationDirectory = layout.buildDirectory.dir("dist")
-        from("LICENSE.txt")
-        from("resources") {
-            configure()
-            filesMatching("**/*.sh") {
-                permissions { unix("rwxr-xr-x") }
-            }
+    from("LICENSE.txt")
+    from("src/main/dist") {
+        val tokens = mapOf("IBC_VERSION" to ibcVersion)
+        filesMatching("ibc.ps1") {
+            filter<org.apache.tools.ant.filters.ReplaceTokens>("tokens" to tokens)
         }
     }
-
-val distWin = registerDistZip("Win") {
-    exclude("**/*.sh", "**/*.plist")
 }
 
-val distLinux = registerDistZip("Linux") {
-    exclude("**/*.ps1", "**/*macos.sh", "**/*.xml", "**/IBC (*", "**/*.plist")
-}
-
-val distMacos = registerDistZip("Macos") {
-    exclude("**/*.ps1", "**/*.xml", "**/IBC (*")
-    // the Linux start scripts; the macOS ones are twsstartmacos.sh and gatewaystartmacos.sh
-    exclude("twsstart.sh", "gatewaystart.sh")
-}
-
-tasks.register("dist") {
-    group = "distribution"
-    description = "Builds IBC.jar and the Windows, Linux and macOS distribution ZIPs."
-    dependsOn(distWin, distLinux, distMacos)
-}
+tasks.assemble { dependsOn(dist) }

@@ -43,13 +43,13 @@ contribution to the project:
 
 4. **Non-developer users**: a lot of IBC users aren't developers. It must be
    easy for them to use any improvements. In particular, you should ensure
-   that the [configuration file](resources/config.ini) and/or
-   [user guide](userguide.md) adequately reflect changes.
+   that the [configuration file](src/main/dist/config.ini) and/or
+   [user guide](docs/userguide.md) adequately reflect changes.
 
 5. **Backward compatibility**: new versions should not force users of previous
    versions to change their configuration or script files (ie no surprises),
    unless this is absolutely essential. Obviously it may be necessary to
-   introduce new settings into the [configuration file](resources/IBC.ini)
+   introduce new settings into the [configuration file](src/main/dist/config.ini)
    or enhance the script files, but this should be done in such a way that
    if a user moves to the new version of IBC without making any changes
    their TWS/Gateway will continue to operate exactly as before.
@@ -89,12 +89,15 @@ set the `IBC_BIN` environment variable permanently.
 From the repository root (use `gradlew` on Windows, `./gradlew` elsewhere):
 
     gradlew jar      builds build/libs/IBC.jar
-    gradlew          builds the distribution ZIP files in build/dist, and
-                     updates resources/IBC.jar and resources/version
+    gradlew          builds the distribution ZIP in build/dist
     gradlew clean    deletes the build folder
 
 Note that the `version` property in [gradle.properties](gradle.properties)
-is used in generating the file names for the distribution ZIP files, is
-compiled into IBC (the `IbcVersionInfo` class is generated during the
-build), and is also put in the [version](resources/version) file which is
-used by the script files.
+is used in the distribution ZIP's file name, is compiled into IBC (the
+`IbcVersionInfo` class is generated during the build), and is stamped into
+`ibc.ps1` (shown by `ibc.ps1 version`).
+
+The Java source is in `src/main/java`, and the files that go into the
+distribution ZIP (`ibc.ps1`, `config.ini`, the shortcuts and so on) are in
+`src/main/dist`. `scripts/deploy.ps1` builds the ZIP and installs it into a
+local folder for testing.

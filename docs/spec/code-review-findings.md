@@ -1,7 +1,7 @@
 # IBC Java Code Review — Findings
 
 - **Date:** 2026-09-30
-- **Scope:** `src/ibcalpha/ibc` (83 files, ~8.8k lines) at commit `fc6d917` (version 3.24.2)
+- **Scope:** `src/ibcalpha/ibc`, now `src/main/java/ibcalpha/ibc` (83 files, ~8.8k lines) at commit `fc6d917` (version 3.24.2)
 - **Method:** static reading of the source; none of the issues below have been reproduced at runtime.
 - **Revised:** 2026-10-01, after checking each finding against the source. None of the Java files
   discussed changed after `fc6d917`, so the line numbers still apply.
@@ -186,7 +186,7 @@ never reach the handler: they are lost without any log entry. See H6.
 - **Problem:** the client is compared with `InetAddress.getLoopbackAddress()` (normally
   `127.0.0.1`). A client connecting over `::1` is refused unless it is listed in `ControlFrom`.
   This is easy to hit: on Windows `localhost` usually resolves to `::1` first. (The bundled
-  `SendCommand.ps1` and `commandsend.sh` default to `127.0.0.1`, so they are not affected.)
+  `ibc.ps1` defaults to `127.0.0.1`, so it is not affected.)
 - **Fix:** `socket.getInetAddress().isLoopbackAddress()`.
 
 ---
@@ -199,7 +199,7 @@ never reach the handler: they are lost without any log entry. See H6.
 | L2 | `CommandChannel.java:135-136` | Streams use the platform default charset; specify UTF-8/ASCII explicitly. |
 | L3 | `Utils.java:59-91` | `invokeMenuItem` retries every 250 ms with no limit while a menu item is disabled, so the calling thread can hang forever. |
 | L4 | `AbstractLoginHandler.java:163` | `setMissingCredential` throws `NullPointerException` if the text field is not found (e.g. after an IBKR layout change); other finders are null-checked. |
-| L5 | `DefaultLoginManager`, `config.ini`, start scripts | Credentials can be passed as command-line arguments (the `UserId`/`Password` settings in `StartTWS.ps1`/`StartGateway.ps1`, and the Unix start scripts, still do this). They are masked in IBC's log (`IbcTws.java:460`) but visible to anyone who can list processes. `config.ini` stores them in plaintext. |
+| L5 | `DefaultLoginManager`, `config.ini`, start scripts | Credentials can be passed as command-line arguments (`ibc.ps1` doesn't: it leaves them in the config file).They are masked in IBC's log (`IbcTws.java:460`) but visible to anyone who can list processes. `config.ini` stores them in plaintext. |
 | L6 | `RestartTask.java:100-115` | Works out "next minute" with manual hour/minute rollover; `now.plusMinutes(1).withSecond(0).withNano(0)` does the same. The 1 ms busy-wait while the seconds are ≥ 58 is deliberate: it keeps the restart time at least about 2 s away. `plusMinutes` doesn't replace it, but sleeping until the next minute would. |
 
 ---

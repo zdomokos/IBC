@@ -1,9 +1,15 @@
-target
-dist
-nbproject
-bin
-build
-makedocs/*/*.aux
-makedocs/*/*.log
-makedocs/*/*.tex
-.*
+# Gradle
+.gradle/
+build/
+
+# IDEs (VS Code's Java extension compiles into bin/)
+.idea/
+.vscode/
+*.iml
+bin/
+out/
+
+# pandoc/xelatex intermediate files from docs/makedocs
+docs/makedocs/*.aux
+docs/makedocs/*.log
+docs/makedocs/*.tex

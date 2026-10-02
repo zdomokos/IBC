@@ -1,6 +1,6 @@
 # How IBC Works
 
-- **Scope:** `src/ibcalpha/ibc`, as of commit `fc6d917` (version 3.24.2)
+- **Scope:** `src/ibcalpha/ibc` (now `src/main/java/ibcalpha/ibc`), as of commit `fc6d917` (version 3.24.2)
 - **Related:** [Code review findings](../spec/code-review-findings.md)
 
 IBC automates the Interactive Brokers TWS and IB Gateway desktop apps: it logs in, dismisses
@@ -13,7 +13,7 @@ screen scraping, synthetic mouse input, OS accessibility APIs or reflection.
 ## 1. Process model: IBC and TWS share one JVM
 
 ```
-StartIBC.ps1 / ibcstart.sh
+ibc.ps1 start
         │  java -cp <IBC jar>;<TWS jars> ... ibcalpha.ibc.IbcTws  <config.ini> [mode]
         ▼
 ┌──────────────────────────── one JVM ────────────────────────────┐
@@ -27,7 +27,7 @@ StartIBC.ps1 / ibcstart.sh
 
 - The start scripts launch `java` with IBC's class as the entry point:
   `ibcalpha.ibc.IbcTws` for TWS, `ibcalpha.ibc.IbcGateway` for the Gateway
-  (`resources/scripts/StartIBC.ps1`, `$entryPoint`). The TWS jars are on the classpath.
+  (`src/main/dist/ibc.ps1`, `$entryPoint`). The TWS jars are on the classpath.
 - After initialising, IBC starts TWS by calling its `main` directly:
   - TWS: `jclient.LoginFrame.main(twsArgs)` (`IbcTws.java:516`)
   - Gateway: `ibgateway.GWClient.main(twsArgs)` (`IbcTws.java:474`)
@@ -272,7 +272,7 @@ Optional, enabled by `CommandServerPort` (0 = off).
 
 - Replies: `OK <info>`, `ERROR <info>`, optional `INFO <info>` (hidden unless
   `SuppressInfoMessages=no`), and an optional `CommandPrompt`.
-- `resources/SendCommand.ps1` (Windows) and `resources/commandsend.sh` (Unix) are sample clients.
+- `src/main/dist/ibc.ps1` is the bundled client (`ibc.ps1 stop`, `ibc.ps1 restart`, ...).
 
 ## 9. Diagnostics: window structure logging
 
