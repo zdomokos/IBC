@@ -92,10 +92,10 @@ From the repository root (use `gradlew` on Windows, `./gradlew` elsewhere):
     gradlew          builds the distribution ZIP in build/dist
     gradlew clean    deletes the build folder
 
-Note that the `version` property in [gradle.properties](gradle.properties)
-is used in the distribution ZIP's file name, is compiled into IBC (the
-`IbcVersionInfo` class is generated during the build), and is stamped into
-`ibc.ps1` (shown by `ibc.ps1 version`).
+The version is the build date, `yy.M.d` (eg `26.10.1`); `-PibcVersion=<version>`
+overrides it. It is used in the distribution ZIP's file name, is compiled into
+IBC (the `IbcVersionInfo` class is generated during the build), and is stamped
+into `ibc.ps1` (shown by `ibc.ps1 version`).
 
 The Java source is in `src/main/java`, and the files that go into the
 distribution ZIP (`ibc.ps1`, `config.ini`, the shortcuts and so on) are in

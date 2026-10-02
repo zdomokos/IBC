@@ -46,7 +46,7 @@ The final IBC command line (logged as `Starting IBC with this command:`) is:
 |------------|---------|-----------|
 | Main class | `ibcalpha.ibc.IbcTws` / `IbcGateway`, which then calls TWS's own `main` | Yes, this is how IBC works |
 | Extra properties | `-DjtsConfigDir=<TwsSettingsPath>`, `-Dibcsessionid=<random>`, autorestart option (`-Drestart=…`) | Yes |
-| `-Dchannel=latest` | Hardcoded in `ibc.ps1`.The standalone 1045 `tws.vmoptions` sets no channel, so this may not match what `tws.exe` uses internally. Probably only affects update checks | **Check** with the procedure below |
+| `-Dchannel=latest` | Hardcoded in `ibc.ps1`. The standalone 1045 `tws.vmoptions` sets no channel, so this may not match what `tws.exe` uses internally. Probably only affects update checks | **Check** with the procedure below |
 | `-Dtwslaunch.autoupdate.serviceImpl=…`, `-Dexe4j.isInstall4j=true`, `-Dinstall4jType=standalone` | Hardcoded copies of settings built into the exe | Should match; **check** |
 | Lines with spaces in `tws.vmoptions` | The parser keeps only the first space-separated token, so a line is cut at the first space (e.g. `-Dx=C:\Program Files\y` becomes `-Dx=C:\Program`). The current file has no such lines | Limitation |
 

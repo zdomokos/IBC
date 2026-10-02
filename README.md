@@ -54,8 +54,10 @@ Then, from the repository root:
 
 Notes:
 
-- The version number is set only in [gradle.properties](gradle.properties). It is compiled into
-  IBC, stamped into `ibc.ps1` (`ibc.ps1 version`), and used in the ZIP's name.
+- The version number is the build date, `yy.M.d`: a build on 1 October 2026 is `26.10.1`, in
+  `IBC-26.10.1-windows.zip`. It is compiled into IBC and stamped into `ibc.ps1`
+  (`ibc.ps1 version`). For a second release on the same day, give it explicitly:
+  `gradlew dist -PibcVersion=26.10.1.2`.
 - Build output only goes to `build/`; nothing the build produces is committed.
 - There are no automated tests. Check changes by running IBC against a real TWS and Gateway.
 
@@ -97,30 +99,29 @@ replace it; the old copy is saved as `.bak`), and lists, but doesn't delete, fil
 part of the new version, such as the start scripts of earlier versions. Stop IBC before deploying
 over a running installation. Run `Get-Help ./scripts/deploy.ps1 -Full` for details.
 
-To rebuild the user guide PDF (`docs/userguide.pdf`) you also need pandoc and xelatex (for
+To make a PDF of the user guide (`build/userguide.pdf`, not committed) you also need pandoc and xelatex (for
 example MiKTeX): run `docs/makedocs/makeUserGuide.ps1`.
 
 ## Releasing
 
 There is no release automation. A release is the distribution ZIP attached to a GitHub release:
 
-1. **Set the version** in [gradle.properties](gradle.properties).
-2. **Update the documentation** if behaviour or settings changed:
+1. **Update the documentation** if behaviour or settings changed:
    [docs/userguide.md](docs/userguide.md) and the comments in
-   [src/main/dist/config.ini](src/main/dist/config.ini). Rebuild the PDF with
-   `docs/makedocs/makeUserGuide.ps1`.
-3. **Build:** `gradlew clean dist`.
-4. **Test the ZIP** from `build/dist/` on a clean install, with both TWS and Gateway: log in,
+   [src/main/dist/config.ini](src/main/dist/config.ini).
+2. **Build:** `gradlew clean dist`. The version is the build date, so the ZIP is named for
+   today, eg `IBC-26.10.1-windows.zip` (add `-PibcVersion=26.10.1.2` for a second release on
+   the same day).
+3. **Test the ZIP** from `build/dist/` on a clean install, with both TWS and Gateway: log in,
    auto-restart, and the stop/restart commands.
-5. **Commit** `gradle.properties` (plus any doc changes), then tag the commit with the version
-   number:
+4. **Commit** any changes, then tag the commit with the version from the ZIP's name:
 
    ```
    git tag <version>
    git push origin master <version>
    ```
 
-6. **Publish:** create a GitHub release from the tag and attach the ZIP from `build/dist/`,
+5. **Publish:** create a GitHub release from the tag and attach the ZIP from `build/dist/`,
    either in the GitHub web UI or with the GitHub CLI:
 
    ```
@@ -129,7 +130,7 @@ There is no release automation. A release is the distribution ZIP attached to a 
 
 ## Installing and running
 
-See the [user guide](docs/userguide.md) ([PDF](docs/userguide.pdf)). In short: extract the ZIP to
+See the [user guide](docs/userguide.md). In short: extract the ZIP to
 `C:\IBC`, install [PowerShell 7](https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows)
 (`winget install Microsoft.PowerShell`), copy `config.ini` to `%USERPROFILE%\Documents\IBC` and
 fill in your credentials (for a named account, name it `config-<account>.ini`), and use `ibc.ps1`:

@@ -116,11 +116,6 @@ $accounts = if ($NoAccounts) { @() } else {
     )
 }
 
-$versionLine = Select-String -LiteralPath (Join-Path $repo 'gradle.properties') -Pattern '^\s*version\s*=\s*(\S+)' |
-    Select-Object -First 1
-if (-not $versionLine) { throw "Can't find the version in gradle.properties" }
-$version = $versionLine.Matches[0].Groups[1].Value
-
 #======================== Find TWS ==============================================
 
 # Only used here for the shortcut icons and to find the existing settings: ibc.ps1
@@ -152,15 +147,20 @@ if (-not $SkipBuild) {
     if (-not $IbcBin) {
         throw 'The TWS jar folder is not set: supply -IbcBin or set the IBC_BIN environment variable'
     }
-    Write-Host "Building IBC $version"
+    Write-Host 'Building IBC'
     & (Join-Path $repo 'gradlew.bat') --project-dir $repo dist "-PibcBin=$IbcBin"
     if ($LASTEXITCODE -ne 0) { throw "The build failed (exit code $LASTEXITCODE)" }
 }
 
-$zip = Join-Path $repo "build\dist\IBC-$version-windows.zip"
-if (-not (Test-Path -LiteralPath $zip)) {
-    throw "$zip doesn't exist: build first, or run without -SkipBuild"
+# The version is the build date (or -PibcVersion), so deploy the newest ZIP built
+$zipFile = Get-ChildItem -LiteralPath (Join-Path $repo 'build\dist') -Filter 'IBC-*-windows.zip' -File -ErrorAction SilentlyContinue |
+    Sort-Object LastWriteTime -Descending |
+    Select-Object -First 1
+if (-not $zipFile) {
+    throw "There's no IBC-<version>-windows.zip in $(Join-Path $repo 'build\dist'): build first, or run without -SkipBuild"
 }
+$zip = $zipFile.FullName
+$version = $zipFile.Name -replace '^IBC-(.+)-windows\.zip$', '$1'
 
 #======================== Deploy ===============================================
 

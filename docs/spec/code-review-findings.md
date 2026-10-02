@@ -199,7 +199,7 @@ never reach the handler: they are lost without any log entry. See H6.
 | L2 | `CommandChannel.java:135-136` | Streams use the platform default charset; specify UTF-8/ASCII explicitly. |
 | L3 | `Utils.java:59-91` | `invokeMenuItem` retries every 250 ms with no limit while a menu item is disabled, so the calling thread can hang forever. |
 | L4 | `AbstractLoginHandler.java:163` | `setMissingCredential` throws `NullPointerException` if the text field is not found (e.g. after an IBKR layout change); other finders are null-checked. |
-| L5 | `DefaultLoginManager`, `config.ini`, start scripts | Credentials can be passed as command-line arguments (`ibc.ps1` doesn't: it leaves them in the config file).They are masked in IBC's log (`IbcTws.java:460`) but visible to anyone who can list processes. `config.ini` stores them in plaintext. |
+| L5 | `DefaultLoginManager`, `config.ini`, start scripts | Credentials can be passed as command-line arguments (`ibc.ps1` doesn't: it leaves them in the config file). They are masked in IBC's log (`IbcTws.java:460`) but visible to anyone who can list processes. `config.ini` stores them in plaintext. |
 | L6 | `RestartTask.java:100-115` | Works out "next minute" with manual hour/minute rollover; `now.plusMinutes(1).withSecond(0).withNano(0)` does the same. The 1 ms busy-wait while the seconds are ≥ 58 is deliberate: it keeps the restart time at least about 2 s away. `plusMinutes` doesn't replace it, but sleeping until the next minute would. |
 
 ---

@@ -1,964 +1,498 @@
-# **IBC USER GUIDE**
+# IBC User Guide
 
-IMPORTANT 
+This guide is for this fork of IBC, which runs on **Windows** and is controlled with a single
+PowerShell script, `ibc.ps1`. The original IBC ([IbcAlpha/IBC](https://github.com/IbcAlpha/IBC))
+was retired in September 2026; its settings and scripts differ from this fork's, so use this
+guide rather than upstream's.
 
->NOTES REGARDING AUTO-RESTART IN TWS/GATEWAY 1018 and later versions.
->
-> Starting with version 3.15.0, IBC now has the ability to allow TWS/Gateway to
-> use the autorestart mechanism originally introduced in TWS version 974/975.
->
-> This means that you can now set TWS/Gateway to run all week with a single 
-> login at the start of the week, under the control of IBC.
->
-> To configure this behaviour use the `AutoRestart` setting in the `Lock and
-> Exit` section of the TWS/Gateway configuration dialog. Alternatively use the
-> `AutoRestartTime` setting in `config.ini`.
->
-> This support for auto-restart can lead to confusion if you sometimes want to
-> start TWS/Gateway without using IBC. For advice on this, see the section
-> entitled **How to run TWS/Gateway without IBC when IBC is installed** towards
-> the end of this document.
+To see which version of IBC you have, run `ibc.ps1 version`.
 
+## 1. What IBC does
 
-IMPORTANT
+IBC runs Interactive Brokers' Trader Workstation (TWS) or IB Gateway without anyone at the
+keyboard, so that unattended automated trading systems can use them. It starts TWS, then watches
+for the windows and dialogs that would normally need a person and deals with them. For example:
 
->Make sure you read the information in the **Scope of this User Guide** section.
+- it fills in your username and password and logs in
+- it selects live or paper trading
+- it answers dialogs such as "Accept incoming connection?" and the paper-trading account warning
+- it lets TWS restart every day **without logging in again**, so that you only need to log in
+  (and approve the IBKR Mobile alert) once a week
+- it can retry the login when you miss an IBKR Mobile alert
+- it accepts commands such as STOP and RESTART from other programs or computers
 
+IBC and TWS run in the same Java process: IBC starts first and then starts TWS from inside
+itself. So if TWS exits, IBC exits too, and the other way round.
 
-## Introduction
+## 2. Quick start
 
-### Overview of IBC
+1. Install the **offline** TWS (see *Requirements*), and run it once by hand to check that you
+   can log in and that it's set to English.
+2. Install PowerShell 7: `winget install Microsoft.PowerShell`.
+3. Extract the IBC ZIP to `C:\IBC`.
+4. Copy `C:\IBC\config.ini` to `%USERPROFILE%\Documents\IBC\config.ini` and set `IbLoginId` and
+   `IbPassword` in it. For your paper-trading account, also set `TradingMode=paper`.
+5. Start it: double-click the `IBC (TWS)` shortcut in `C:\IBC`, or run
+   `C:\IBC\ibc.ps1 start`.
+6. In TWS, open the Global Configuration, go to **Lock and Exit**, and select **Auto restart**
+   with a time when you don't need TWS (see *Keeping TWS running all week*).
 
-IBC enables Interactive Brokers' Trader Workstation (TWS) and Gateway to
-be run in 'hands-free' mode, so that a user need not be present.  This makes
-possible the deployment of unattended automated trading systems.
+To run your live and paper accounts side by side, see *Several accounts*.
 
-IBC loads TWS or the Gateway and then 'listens' for various events (such
-as the display of dialogs) that would normally require user intervention. It
-can then automatically take appropriate action on the user's behalf. For
-example, it automates the TWS and Gateway login by filling the login
-dialog with your credentials and 'clicking' the login button.
+## 3. Requirements
 
-Here are some of the things IBC does for you:
+**Windows with PowerShell 7.** `ibc.ps1` needs PowerShell 7 (`pwsh`), not the Windows PowerShell
+5.1 built into Windows. Install it with `winget install Microsoft.PowerShell` (or from Microsoft's
+website). The shortcuts and the sample scheduled task use it automatically.
 
-- starts TWS or the Gateway
+**The offline TWS or IB Gateway.** IBKR offers two kinds of TWS: a self-updating one and an
+offline (standalone) one that never changes after installation. **IBC only works with the
+offline version.** It installs into a folder named after its version, for example `C:\Jts\1051`
+for TWS 10.51. The TWS download contains the Gateway too, so you don't need a separate Gateway
+download; IBKR's Gateway-only download installs into `C:\Jts\ibgateway\<version>` instead.
 
-- logs you into TWS or Gateway
+It's safest to use the *stable* offline version of TWS for live trading: the *latest* version is
+more likely to have bugs.
 
-- clicks the YES button if the "Accept incoming connection?" dialog is
-  displayed
+**Java** comes with TWS: IBC uses the Java that TWS installed for itself, so you don't need to
+install Java. (You can choose another one with the `JavaPath` setting, but there's rarely a
+reason to.)
 
-- allows TWS or Gateway to automatically restart each day without need for 
-  repeated authentication: authentication is only required the first time
-  during the week that TWS or Gateway run after 01:00 ET on Sunday
- 
-- allows two-factor authentication using the IBKR Mobile app, including
-  repeated alerts until the user acknowledges
-  
-IBC also responds to certain commands sent to it by another program,
-for example to tell TWS/Gateway to shut itself down cleanly.
+**English.** IBC recognises TWS's windows by their text, so TWS must run in English. IBC makes
+sure of this whenever it starts TWS.
 
-> Note that this fork of IBC currently supports Windows only. The Linux and
-> macOS scripts of the original IBC have been removed; they can be added back
-> later if needed.
-	
-### Scope of this User Guide
-
-This User Guide is intended to help you get started with IBC. It does not cover
-every feature in depth.
+## 4. Installing IBC
 
-Note that the configuration file `config.ini` that governs IBC's behaviour
-contains extensive notes that provide more information on the various settings.
+Either:
 
-### Acknowledgement
-
-This User Guide has been produced using the Pandoc document conversion
-system to produce the PDF from the markdown source.
+- **From a release:** download the ZIP (`IBC-<version>-windows.zip`) from the
+  [releases page](https://github.com/zdomokos/IBC/releases). Before extracting it, right-click it
+  in File Explorer, choose Properties, tick **Unblock** and click OK; otherwise PowerShell may
+  refuse to run `ibc.ps1`. Then extract everything into `C:\IBC`. (If you've already extracted
+  it, run `Get-ChildItem C:\IBC -Recurse | Unblock-File` in PowerShell instead.)
+- **From the source:** `scripts/deploy.ps1` in the repository builds IBC and installs it into a
+  folder, and can also set up live and paper accounts for you (see *Several accounts*).
 
-
-## Getting Started
+The installed folder contains:
 
-### Checklist
-
-Here is a summary of the steps you need to perform to get IBC
-up and running properly.
-
-1. Install the offline version of Interactive Brokers Trader Workstation
-   (see *Interactive Brokers*   *Trader Workstation* in the *Prerequisites*
-   section), and make sure that it uses the English language setting.
-
-   **Please note that you MUST download the OFFLINE version of TWS, not the**
-   **self-updating version: IBC DOES NOT WORK with the self-updating version**
-   **of TWS.**
+| File | Purpose |
+|------|---------|
+| `ibc.ps1` | starts TWS/Gateway and sends commands to a running IBC |
+| `config.ini` | sample configuration file, with every setting described |
+| `IBC.jar` | the IBC program |
+| `IBC (TWS).lnk`, `IBC (Gateway).lnk` | shortcuts that run `ibc.ps1 start` |
+| `Start TWS (autorestart).xml` | sample Task Scheduler task |
+| `README.txt`, `LICENSE.txt` | brief instructions, licence |
 
-2. Download the IBC distribution ZIP file (see the *Where to get IBC*
-   section).
+IBC adds a `Logs` folder when it runs.
 
-3. Install IBC (see the *Installing IBC* section). Please note
-   that if you already have an existing IBC installation, it's wise to
-   rename its folder before installing the new version in case you need to
-   revert to it later.
+The default locations, which `ibc.ps1` assumes unless you tell it otherwise:
 
-4. Create an encrypted folder called `ibc` in your personal
-   filestore (see *Protecting the Password* in the *Password Security* section).
-
-5. Copy the configuration file (called `config.ini`) from the
-   IBC installation folder to the encrypted folder created in
-   step 4.
-
-6. Edit the `config.ini` file,using a text editor such as Notepad, to set
-   your username and password in the `IbLoginId` and `IbPassword` settings.
-   It's advisable to use your paper-trading credentials at first to check
-   things out, and for this you'll also need to set the `TradingMode` setting.
-
-7. Check which version of TWS IBC will run. Normally there's nothing to do:
-   `ibc.ps1` uses the newest offline TWS installed in `C:\Jts`. To use a
-   different version, set `TwsMajorVersion` in the launcher settings at the
-   top of `config.ini`.
-   
-   To find the TWS major version number, first run TWS or the Gateway manually
-   using the IBKR-provided icon, then click `Help > About Trader Workstation`
-   or `Help > About IB Gateway`. In the displayed information you'll see a
-   line similar to this:
-
-   ```
-      Build 10.19.1f, Oct 28, 2022 3:03:08 PM
-   ```
-
-   The major version number for the above example would be 1019 (ie ignore the
-   period after the first part of the version number).
-
-8. At this stage, everything is set up to run IBC with its default
-   settings, which will start TWS and attempt to log it into your
-   paper-trading user. It is worthwhile doing this to check that everything
-   works before further customising it to suit your needs. To do this, run
-   `ibc.ps1 start` from the IBC installation folder, or use the `IBC (TWS)`
-   shortcut.
-   If everything is satisfactory, shut down IBC by closing TWS in the
-   usual way.
-
-   Note that when you start IBC, information about the startup
-   process is logged to a file to aid diagnosing any faults that may
-   occur. You will be notified of the log file name during the startup
-   sequence. Please include this file when reporting problems with IBC.
-
-9. Now you can edit the configuration file `config.ini` to make any further
-   customisations you need. See *Configuring IBC* for further information.
-
-10. If you did not install TWS in its default location, or store the
-   configuration file in the recommended location, you will have to set the
-   launcher settings at the top of the configuration file (for example
-   `TwsPath`), or tell `ibc.ps1` where the configuration file is with its
-   `-Config` option. The settings contain comments that will help you do this
-   correctly.
-
-11. If you intend to run API programs to connect with TWS, you will need
-    to manually edit the API settings in TWS's Global Configuration Dialog.
-
-12. If you want TWS to automatically restart every day during the week without
-    you having to re-authenticate, you'll need to ensure the AutoRestart time
-	is set appropriately in the Lock and Exit section of the Global
-	Configuration dialog. Note that the only alternative to auto-restart is
-	auto-logoff: this shuts down TWS completely at the specified time, and
-	it's then up to you to restart it and re-authenticate.
-	
-### Prerequisites
-
-This section details the other software that is needed to run IBC.
-
-#### Java Runtime
-
-Both IBC and TWS/Gateway are Java programs, and therefore the Java
-Runtime needs to be accessible, but you don't have to do anything to ensure
-this.
-
-The TWS and Gateway installers include a hidden version of Java
-that Interactive Brokers have used for developing and testing TWS. This
-version also runs IBC perfectly, and the IBC scripts
-ensure that it is used.
-
-This means that it is not necessary to ensure that Java is installed on your
-computer. It doesn't matter if it is already installed, but the IBC
-scripts won't use it. However the scripts do make provision for declaring
-specifically which Java installation is to be used in exceptional situations
-where necessary.
-
-If you had previously installed Java for use with old versions of TWS, but
-do not need it for any other programs, then you might want to consider
-uninstalling it once you have finished setting up IBC.
-
-
-
-#### Interactive Brokers Trader Workstation
-
-Before running IBC, you will need to download and install the **offline**
-version of Trader Workstation from the
-[Interactive Brokers](http://www.interactivebrokers.com/) website.
-
-The location of the TWS downloads page on IBKR's website varies from time to
-time, and from country to country.  At the time of writing, on IBKR's US website
-(linked above) you need to click the `Trading` menu near the top of the page,
-then select `Platforms`, and then click `Download TWS` in the 'Trader
-Workstation (TWS)' panel. You will then be offered a choice of several different
-TWS downloads.
-
-Currently a valid direct link to the downloads page is
-[TWS Software](https://www.interactivebrokers.com/en/index.php?f=14099#tws-software).
-
-IBKR provides two modes of operation for TWS:
-
-- an online, or self-updating TWS that automatically receives updates as IBKR
-enhances it and fixes bugs. IBC **does not work** with the self-updating
-TWS, so **do not install the self-updating version for use with IBC**
-
-- an offline or standalone TWS that, after download and installation, never
-changes (until you download and install another version): you **must**
-download and install this offline version for use with IBC.
-
-Note that the TWS installation includes the code for both TWS and the
-Gateway: there is no need to do another download for the Gateway.
-
-However, there are Gateway-specific downloads on IBKR's website. They contain
-the same code as the TWS downloads, but they install in a different
-place. You can install one of these, as well as or instead of the TWS installer.
-You can find these via the LOGIN dropdown in the title bar of IBKR's website.
-
-When you run the IBC script to load TWS, it will use the TWS installation if there
-is one, and if not it will use the Gateway installation if there is one.
-Similarly when you run the IBC script to load the Gateway, it will use the Gateway
-installation if there is one, and if not it will use the TWS installation if
-there is one. (Needless to say, if neither a TWS download nor a Gateway
-download has been installed, the scripts will fail!)
-
-It is safest to use the 'stable' offline version of TWS rather than the
-'latest' version for live trading: the latter is more likely to have bugs.
-
-IBC needs TWS to operate in English so that it can recognise the
-various dialogues that it interacts with. You can set TWS's language by
-starting it manually (ie without using IBC) and selecting the language on the
-initial login dialog. TWS will remember this language setting when you
-subsequently start it using IBC.
-
-Note that you do not need an IBKR account to try out IBC, as you can use IBKR's
-Free Trial offer, for which there is a link at the top of the homepage on the
-website.
-
-### Where to get IBC
-
-IBC is officially distributed as a ZIP file containing the compiled
-program and some additional files, detailed below.
-
-The ZIP file for the latest version should be downloaded from
-[Github](https://github.com/IbcAlpha/IBC/releases).
-Earlier versions can also be downloaded from the same place if need be.
-
-The distribution ZIP file contains:
-
-* [License](LICENSE.txt) text
-* A compiled JAR (named similar to `IBC.jar`), containing the compiled
- Java code for the IBC program
-* A sample configuration file (named similar to `config.ini`)
-* `ibc.ps1`, which starts TWS or the Gateway and sends commands to a running
- IBC (for example to tidily shut down or restart TWS or Gateway from the same
- or another computer); run `ibc.ps1 version` to see the IBC version number
-* Shortcuts called `IBC (TWS)` and `IBC (Gateway)` that run `ibc.ps1 start`
-* A sample Windows Task Scheduler file (named similar to
-`Start TWS Live (daily).xml`), which can be used to automate starting TWS
- or Gateway
-
-Source code and build scripts are not included in the distribution ZIPs, as
-they are freely available from the
-[IBC project page](https://github.com/IbcAlpha/IBC) on Github.
-
-### Installing IBC
-
-IBC is run with `ibc.ps1`, a PowerShell script, which needs
-PowerShell 7 (`pwsh`). If you don't already have it, you can install it
-with this command:
+| What | Where |
+|------|-------|
+| TWS/Gateway | `C:\Jts` |
+| IBC | `C:\IBC` (any folder works: `ibc.ps1` finds its own files) |
+| your configuration files | `%USERPROFILE%\Documents\IBC` |
+
+## 5. How IBC finds TWS, its settings and your configuration
+
+It helps to know that TWS keeps its **program** and its **settings** in separate places, and that
+IBC chooses each of them separately.
 
 ```
-winget install Microsoft.PowerShell
+C:\Jts\1050\    TWS 1050 program: jars, Java, tws.vmoptions  ┐ TwsMajorVersion chooses
+C:\Jts\1051\    TWS 1051 program                             ┘ which one runs
+
+C:\Jts\1051\    settings TWS 1051 uses when started by hand (jts.ini and a folder per user)
+C:\Jts\paper\   settings of an IBC instance: TwsSettingsPath chooses where
 ```
 
-Before you install IBC, note that you'll need to unblock the zip file,otherwise PowerShell will refuse to run the scripts
-when you run them from a PowerShell prompt. To do this, right click on the
-.zip file in File Explorer, select 'Properties' from the context menu, set
-the 'Unblock' check box on the 'General' tab, and click 'OK'. (If you've
-already extracted the files, you can instead run
-`Get-ChildItem C:\IBC -Recurse | Unblock-File` in PowerShell.)
+**The program** is the version folder, `C:\Jts\<version>`. It holds the jar files, the Java TWS
+came with, and `tws.vmoptions` (the Java heap size and similar options, which IBC also uses).
+IBC runs the version in the `TwsMajorVersion` setting; if that's not set, it runs the newest
+offline version installed. So after installing a new TWS version, IBC uses it automatically.
 
-Installing IBC is just a matter of extracting the contents of the
-downloaded ZIP file to wherever you want to install it. 
+**The settings** are `jts.ini` (login options, language), `xmlopt.dat`, and one folder per IBKR
+user (named with 40 letters) holding that user's layout (`tws.xml` and daily backups), rules,
+chart settings, logs, and the `autorestart` file used for restarting without logging in. Recent
+offline installers keep them in the version folder, so started by hand each TWS version has its
+own copy. IBC tells TWS where its settings are with the `TwsSettingsPath` setting; if that's not
+set, it uses the folder that already holds `jts.ini`, normally the version folder, so IBC uses
+the same settings as starting TWS by hand.
 
-You will make things easiest for yourself if you use the locations described
-in 'Default Paths' below, because that will minimise customising the
-configuration file.
+Because the settings folder isn't tied to a version, an IBC instance with its own settings folder
+(such as `C:\Jts\paper`) keeps its layout and logins when you change `TwsMajorVersion`. Moving to
+a newer version is the normal direction: TWS updates older settings as needed. Going back to an
+older version usually works between neighbouring versions, but an older TWS may not understand
+settings a newer one added.
 
-If you already have a previous IBC installation, it's wise to rename its
-folder (eg to `IBC.old`) so that you can easily refer back to any
-customisations you did for that version.
+**Your configuration file** holds your credentials and IBC's settings. `ibc.ps1` looks for it in
+`%USERPROFILE%\Documents\IBC`:
 
-To install it:
+| You run | Configuration file |
+|---------|--------------------|
+| `ibc.ps1 start` | `config.ini` |
+| `ibc.ps1 start paper` | `config-paper.ini` |
+| `ibc.ps1 start -Config D:\x\my.ini` | the file given |
 
-- create the folder where you want to install IBC, if it doesn't already
-  exist. As noted above (see Default Paths) this is normally `C:\IBC`
-  but it can be anywhere you like
+The name after `start` (here `paper`) is the **account name**. You can use any name; each needs
+its own `config-<name>.ini`. IBC's window title and its log folder are named after it too.
 
-- locate the downloaded ZIP file using File Explorer (Windows Explorer on
-  Windows 7 and earlier). Windows treats ZIP files like an ordinary folder,
-  so you can see its contents the same way as any other folder
+## 6. The configuration file
 
-- select all the files and folders and drag them into your installation folder
+### Keeping it secure
 
-#### Default Paths
+The configuration file contains your IBKR password, so keep it where other users of the computer
+can't read it: your `Documents` folder is private to you, and `ibc.ps1` expects
+`%USERPROFILE%\Documents\IBC`. For more protection, encrypt that folder, so that not even an
+administrator can read it: right-click the folder, choose Properties, click Advanced on the
+General tab, tick **Encrypt contents to secure data**, and click OK (this needs a Professional or
+higher edition of Windows).
 
-`ibc.ps1` (and these instructions) assume the default paths shown in the
-table below (where ``<username>`` represents your operating system user name,
-not your IBKR login id).
+`ibc.ps1` only takes your credentials from the configuration file. It never puts them on a
+command line, where other programs could see them.
 
-If you store any of these items in other locations, you will need to set the
-launcher settings at the top of the configuration file, or use the `-Config`
-option of `ibc.ps1`, to reflect this.
+### The settings you're most likely to need
 
-| Item                      | Path                                  |
-| ------------------------- | --------------------------------------|
-| IBKR TWS program files    | `C:\Jts`                              |
-| IBC program files         | `C:\IBC`                              |
-| config.ini                | `%USERPROFILE%\Documents\IBC`         |
+`config.ini` describes every setting in detail. Most have sensible defaults. These are the ones
+you're most likely to need:
 
+| Setting | Notes |
+|---------|-------|
+| `IbLoginId`, `IbPassword` | your IBKR username and password. A live account and its paper-trading account have different usernames. |
+| `TradingMode` | `live` (the default) or `paper` |
+| `AcceptNonBrokerageAccountWarning` | When you log in to a paper-trading account, TWS warns that it isn't a brokerage account, and refuses API connections until you accept. `yes` accepts it automatically. |
+| `AcceptIncomingConnectionAction` | What to do when an unknown computer connects to the API. `reject` is safest, with the trusted addresses set in TWS's API settings. |
+| `ExistingSessionDetectedAction` | What to do when the same username is already logged in elsewhere. |
+| `OverrideTwsApiPort` | The port API programs connect to. Instances running at the same time need different ports. |
+| `CommandServerPort` | The port for commands such as `ibc.ps1 stop`. `0` (the default) turns commands off. |
+| `AutoRestartTime`, `ColdRestartTime`, `ClosedownAt` | daily restart, Sunday cold restart, closedown: see *Keeping TWS running all week* |
+| `ReloginAfterSecondFactorAuthenticationTimeout` | see *Second factor authentication* |
 
-### Password Security
+Write paths with doubled backslashes, for example `C:\\Jts\\paper`, because the file uses Java's
+escaping rules. A backslash in a password must be doubled too.
 
-To login to TWS or IB Gateway, IBC needs to know your Interactive
-Brokers username and password. You should very carefully secure your IBKR
-account username and password to prevent unauthorised use by third parties.
-This section gives you guidance on how to achieve this.
+`IbDir` is deprecated: use `TwsSettingsPath` instead, and leave `IbDir` empty. If the two differ,
+auto-restart fails.
 
-The username and password are given to IBC in one of two ways:
+### Launcher settings
 
-- via the configuration `.ini` file: this is the preferred method because the
-  configuration file can be protected by the operating system
+Section 0 of `config.ini` holds settings that only `ibc.ps1 start` uses (IBC itself ignores them).
+They're all optional; leave them empty to use the defaults.
 
-- via the command line parameters when IBC is started: this method is
-  strongly deprecated because command line information associated with a
-  process is easily available outside the process (for example via Task
-  Manager on Windows)
+| Setting | Default | Notes |
+|---------|---------|-------|
+| `TwsMajorVersion` | the newest offline TWS/Gateway installed | eg `1050` for TWS 10.50 (see Help > About Trader Workstation) |
+| `TwsPath` | `C:\Jts` | where TWS/Gateway is installed |
+| `TwsSettingsPath` | the folder that already holds `jts.ini` | where TWS keeps its settings; created if it doesn't exist. Instances running at the same time need different ones. |
+| `LogPath` | `<IBC folder>\Logs\<account>` | IBC's diagnostic log; `CON` shows it in IBC's window, `none` turns it off |
+| `JavaPath` | the Java TWS came with | folder containing `java.exe` |
+| `On2FATimeout` | `exit` | `restart` starts IBC again when it exits because the IBKR Mobile alert timed out |
+| `MinimizeIbcWindow` | `no` | `yes` starts IBC's window minimised |
 
-#### Protecting the Configuration File
+## 7. Starting and stopping
 
-To protect this sensitive information, the configuration file needs to be
-stored in a location where it will not be accessible to other users of the
-computer. The simplest way to achieve this is to store it within your personal
-filestore:
-
-- on Windows this is your `Documents` folder (which is normally actually
-  located at:
-
-  `C:\Users\<username>\Documents`).
-
-  Note that this folder may also be addressed using environment variables like
-  this:
-
-  `%USERPROFILE%\Documents`
-
-You are advised to place the file in its own `ibc` folder within this location.
-
-You should also consider encrypting the folder containing the configuration
-file. This will prevent another user with administrator privileges gaining
-access to the contents: even if they use their administrator privileges to
-give themselves access to the file, its contents will not be decrypted because
-they are not the user that encrypted it.
-
-To encrypt the folder on Windows (note that this requires a Professional or
-higher edition of Windows - the home edition does not provide this
-facility):
-
-- right click the folder and select `Properties`
-
-- click the `Advanced` button on the `General` tab
-
-- set the checkbox labelled `Encrypt contents to secure data`
-
-- finally, click the `OK` buttons to apply the changes.
-
-### Configuring IBC
-
-IBC must be supplied with a configuration file. A specimen file called
-config.ini is included in the distribution ZIPs. You will need to edit this
-file to include your IBKR username and password, and to ensure that IBC
-behaves in the way that best suits your needs.
-
-You should copy the supplied file from the IBC installation folder
-into the secure location described above before editing it, so that you have
-a clean copy to revert to if need be.
-
-The sample `config.ini` file contains detailed comments on the
-meaning of each configuration property. Many of these have sensible defaults,
-or are only needed in special situations, so to help you get started quickly,
-here is a list of the settings that you are most likely to need to change:
-
-| Setting                        | Notes                                       |
-| ------------------------------ | --------------------------------------------|
-| IbLoginId                      | You must set this to your IBKR username     |
-| IbPassword                     | You must set this to your IBKR password     |
-| TradingMode                    | You must set this to `paper` if you want to |
-|                                | use your paper-trading account. Otherwise   |
-|                                | you can omit the setting entirely or set it |
-|                                | to `live`.                                  |
-| AcceptNonBrokerageAccountWarning | Logging in to a paper-trading account     |
-|                                | results in TWS displaying a dialog asking   |
-|                                | the user to confirm that they are aware that |
-|                                | this is not a brokerage account. Until this  |
-|                                | dialog has been accepted, TWS will not allow |
-|                                | API connections to succeed. Setting this to |
-|                                | 'yes' (the default) will cause IBC to       |
-|                                | automatically confirm acceptance. Setting   |
-|                                | it to 'no' will leave the dialog on display, |
-|                                | and the user will have to deal with it      |
-|                                | manually.                                   |
-| IbDir                          | You can set this if you want TWS            |
-|                                | to store its settings in a different folder |
-|                                | from the one it's installed in. However this |
-|                                | usage is now deprecated because auto-restart |
-|                                | does not work when you do this. Instead,    |
-|                                | you should specify the settings folder in   |
-|                                | the `TwsSettingsPath` launcher setting in   |
-|                                | the configuration file.                     |
-| AcceptIncomingConnectionAction | It is safest to set this to `reject` and to |
-|                                | explicitly configure TWS to specify which   |
-|                                | IP addresses are allowed to connnect to the |
-|                                | API, by means of the API settings in the    |
-|                                | TWS/Gateway configuration dialog.           |
-
-
-There are two ways that IBC can locate your edited `config.ini` file.
-
-- the simplest way is to tell it where to find the file when you start it.
-  `ibc.ps1 start` uses `config.ini`, or `config-<account>.ini` if you give an
-  account name, in `%USERPROFILE%\Documents\IBC`. If you want a different
-  name or location, use its `-Config` option to give the file's full path.
-
-- if you do not specify a configuration file name, IBC will expect to find a
-  file named `config.ini` in the current computer user's private filestore,
-  that is `%USERPROFILE%\Documents\IBC`.
-
-### Starting IBC
-
-IBC is started with `ibc.ps1 start` in the IBC folder. It uses
-the configuration file `%USERPROFILE%\Documents\IBC\config.ini`, or, if you
-give an account name, `config-<account>.ini` in the same folder:
+### Starting
 
 ```
-C:\IBC\ibc.ps1 start                 # TWS, with config.ini
-C:\IBC\ibc.ps1 start paper           # TWS, with config-paper.ini
-C:\IBC\ibc.ps1 start live -Gateway   # IB Gateway, with config-live.ini
+C:\IBC\ibc.ps1 start                  # TWS, with config.ini
+C:\IBC\ibc.ps1 start paper            # TWS, with config-paper.ini
+C:\IBC\ibc.ps1 start live -Gateway    # IB Gateway, with config-live.ini
 ```
 
-You can run it in a number of ways, including:
+You can also double-click a shortcut in the IBC folder (`IBC (TWS)`, `IBC (TWS paper)` and so on;
+double-clicking `ibc.ps1` itself opens it in an editor), copy the shortcuts to your desktop or
+Start menu, or use a scheduled task (see *Scheduled tasks*). To start another account from a
+shortcut, add its name after `start` in the shortcut's target.
 
-* Double-click the `IBC (TWS)` or `IBC (Gateway)` shortcut in the IBC
-  installation folder. (Note that double-clicking a `.ps1` file itself
-  normally opens it in a text editor rather than running it.)
-* Copy these shortcuts to your Start menu, desktop or taskbar. To start a
-  named account, add its name after `start` in the shortcut's target.
-* Run it from a PowerShell 7 prompt, as above
-* Create a scheduled task to run it automatically at the required times (see
-  below for more information about using scheduled tasks)
+`ibc.ps1 start` opens a new window, titled for example `IBC (TWS 1051 paper)`, which shows where
+the log is. **Closing that window closes TWS.** The window closes by itself when TWS exits. If
+something goes wrong, it turns red, shows the error, and waits for a key press.
 
-`ibc.ps1` finds the newest offline TWS installed in `C:\Jts`, and the folder
-holding its existing settings, by itself. If that isn't what you want, set
-the launcher settings at the top of the configuration file: `TwsMajorVersion`,
-`TwsPath`, `TwsSettingsPath`, `LogPath`, `JavaPath`, `On2FATimeout` and
-`MinimizeIbcWindow`, all described there. Run `ibc.ps1 help` for all its
-commands and options.
+With `-Inline`, IBC runs in the current window instead of opening a new one. That's needed for
+Task Scheduler.
 
-## Other Topics
+Run `ibc.ps1 help` for all commands and options.
 
-### Second Factor Authentication
+### The log
 
-You can use your mobile phone or tablet running Android or IOS to provide
-second factor authentication for your TWS login. To do this you'll need to
-install the IBKR Mobile app on your device, which you can download from the
-relevant app store. Once you've installed it, you can register it for
-second factor authentication via the button that it prominently displays.
+Each run writes a diagnostic log to `C:\IBC\Logs\<account>\IBC-<IBC version>_TWS-<TWS
+version>_<DAY>.txt`. There's one file per weekday, which is replaced a week later. It records the
+settings used, the Java command, and what IBC did with each TWS window. It's the first place to
+look when something goes wrong.
 
-Once it's registered, every time you login to TWS or Gateway (including when
-IBC does it for you) you'll receive an alert on your device. When you then
-acknowledge the alert, your login will complete.
+### Stopping
 
-Note that IBC cannot itself assist in the process, so you'll have to actually
-perform the necessary actions on your device yourself, but it's fairly
-convenient because you don't need to be anywhere near your computer running
-TWS, which is helpful if you've used some automated mechanism to start TWS.
+Exit TWS as usual (File > Exit), or, if `CommandServerPort` is set, run `ibc.ps1 stop` (with the
+account name if you use one, eg `ibc.ps1 stop paper`).
 
-However, if you fail to respond to the alert within a fixed period (currently
-3 minutes), you will not then be able to complete your login without manual
-intervention at TWS, and this is where IBC _can_ help. You can canfigure IBC
-to detect such timeouts and re-initiate the login process when this happens.
-To enable this behaviour you need this setting in your `config.ini` file:
+### The renamed TWS program
 
-`ReloginAfterSecondFactorAuthenticationTimeout=yes`
+When IBC starts TWS, it renames `C:\Jts\<version>\tws.exe` to `tws1.exe` (and `ibgateway.exe` to
+`ibgateway1.exe`). This is needed for auto-restart: TWS's restart would otherwise start a new TWS
+without IBC. As a result, the TWS desktop shortcut stops working. To run TWS without IBC, see
+*Running TWS without IBC*.
 
-This timeout/relogin mechanism can repeat any number of times until you
-acknowledge the alert to enable login to succeed.
+## 8. Keeping TWS running all week
 
-In some circumstances, even though you acknowledge the alert, login doesn't
-complete successfully. IBC can deal with this situation automatically by
-shutting down and restarting. This repeats the normal login sequence and thus
-gives you another chance to receive the second factor authentication alert
-on your device.
+IBKR requires TWS to restart every day. In TWS's Global Configuration, under **Lock and Exit**,
+there are two choices:
 
-This behaviour is controlled by the
-`SecondFactorAuthenticationExitInterval` setting, which is the number of
-seconds IBC waits for login to complete when the user has acknowledged the
-alert, after which IBC closes down. For automatic restart, you must also
-set the `On2FATimeout` setting in the configuration file to `restart` (see
-the notes for this setting there).
+| Choice | What happens at the chosen time | For unattended use with IBC |
+|--------|---------------------------------|-----------------------------|
+| **Auto restart** | TWS shuts down and starts again by itself **without logging in**, because it reuses the existing session | **use this** |
+| **Auto logoff** | TWS shuts down and stays down. Something else must start it again, with a full login (and IBKR Mobile alert for a live account). | not suitable |
 
-If you have another automatic means of restarting IBC after it closes (for
-example Task Scheduler), then you should consider setting the
-`On2FATimeout` setting in the configuration file to `exit`, to avoid
-the situation where both mechanisms react at the same time.
+Choose **Auto restart**, at a time when you don't need TWS, for example `11:45 PM`, outside your
+trading hours.
 
-
-### Scheduled Tasks
-
-You can start IBC automaticallyusing the Task Scheduler to run
-`ibc.ps1 start`. The task's action should run the program
-`C:\Program Files\PowerShell\7\pwsh.exe` with arguments like these (add the
-account name after `start`, and `-Gateway` for the Gateway, as needed):
+Instead of setting it in TWS, you can set it in the configuration file, so that it's applied
+every time IBC starts:
 
 ```
--NoProfile -ExecutionPolicy Bypass -File "C:\IBC\ibc.ps1" start -Inline
+AutoRestartTime=11:45 PM
 ```
 
-When you define your task, make sure that the option to 'Run only when user
-is logged on' is selected. Doing this will ensure that you can see and interact
-with TWS.
+The time must be in exactly this format: `hh:mm AM` or `hh:mm PM`, with one space. Setting
+`AutoRestartTime` also clears any auto-logoff time. This is the safer choice for an instance
+whose settings folder was copied from elsewhere, since it might have inherited a different time.
 
-You will then need to log on to Windows before the task runs.
+**How the restart works with IBC.** At the restart time, TWS writes an `autorestart` file into the
+user's folder in its settings folder and exits. `ibc.ps1` notices the file and starts TWS again,
+telling it to resume the session without the login dialog. IBC's window stays open throughout.
+You can see it in the log: `autorestart file found ... authentication will not be required`,
+then `IBC will autorestart shortly`.
 
-Note that you can set up Windows to log on automatically at startup: this might
-be useful, for example, if your system's BIOS allows you to configure the
-system to power on at a particular time. Information on how to do this is
-freely available on the internet. But bear in mind that doing this can
-negatively impact your system's security.
+**The weekly login.** Auto-restart only lasts the week: IBKR requires a full shutdown and new
+login once a week, after 01:00 US/Eastern on Sunday. IBC can do that for you:
 
-Task Scheduler does actually allow you to specify that your task should run
-whether or not the user is logged in. However if you do this, the task is
-always started in a separate user session which you cannot see and interact
-with, even if you are already logged on when the task starts, or if you
-subsequently log on. Therefore you are strongly advised NOT to use the option
-for 'Run whether user is logged on or not'.
+```
+ColdRestartTime=07:05
+```
 
-Remember also to change the task settings to prevent Windows automatically
-ending it after a certain time.
+This is a 24-hour time in your local time zone; choose one that's after 01:00 US/Eastern all year
+round. At that time on Sundays, IBC closes TWS and `ibc.ps1` starts it again with a full login.
+For a live account, choose a time when you can approve the IBKR Mobile alert.
 
-If you want to stop using a Scheduled Task, without losing its definition, you
-can right click on the task's entry in the Task Scheduler console and click
-'Disable'. Clicking 'Enable' will make it available again.
+**Weekends.** To stop TWS after Friday's markets close rather than keep it running through
+Saturday, use:
 
-You can set the AutoRestart time in the Lock and Exit section of the
-configuration dialog: this causes TWS/Gateway to automatically shut down and
-restart without requiring re-authentication at the specified time. When the
-restart time is reached, TWS shuts down (and IBC with it), but this does not
-end the task, because `ibc.ps1` continues
-running to restart IBC. The restarted IBC then reloads TWS with the relevant
-information needed for it to recover its previous session without re-
-authentication. This sequence is then repeated each day at the same time. Thus
-TWS can be kept running all week, with automated startup and a single
-authentication at the start of the week. Note that this is all the same task,
-since the start script run by the Task Scheduler keeps running all the time.
+```
+ClosedownAt=Friday 22:00
+```
 
-Finally on the Sunday, if the task has not been ended before then, IB will
-prevent that session running any further because the session credentials expire.
-At this point it is necessary to start a new task to begin the whole cycle over
+`ClosedownAt=22:00` (without a day) closes TWS every day.
+
+**Live and paper.** Each instance restarts at its own time, in its own settings folder, so they
+don't interfere. Giving them different times (eg `11:45 PM` and `11:50 PM`) keeps their logs
+easier to read.
+
+**If TWS stops for another reason** (a crash, File > Exit, a power cut), auto-restart doesn't
+happen. A scheduled task that runs every few minutes can start it again (see *Scheduled tasks*).
+
+## 9. Second factor authentication
+
+With the IBKR Mobile app, each login sends an alert to your phone, and the login completes when
+you approve it. IBC can't approve it for you, but since you don't need to be at the computer, it
+works well with IBC. Thanks to auto-restart, you only need to approve one alert a week.
+
+If you don't approve the alert in time (currently 3 minutes), TWS can't complete the login on
+its own. With this setting, IBC starts the login again, as many times as needed:
+
+```
+ReloginAfterSecondFactorAuthenticationTimeout=yes
+```
+
+Sometimes the login doesn't complete even though you approved the alert. IBC can then close down
+and start again, giving you another alert: `SecondFactorAuthenticationExitInterval` sets how many
+seconds IBC waits after the approval, and `ExitAfterSecondFactorAuthenticationTimeout=yes` makes
+it close down. For `ibc.ps1` to then start IBC again, set the launcher setting
+`On2FATimeout=restart`. If something else already restarts IBC (such as a scheduled task that
+repeats), leave it at `exit`, so that the two don't both start it.
+
+## 10. Several accounts
+
+You can run several TWS instances at the same time, for example your live and paper-trading
+accounts, or accounts of different people, from one TWS installation and one IBC installation.
+Each instance needs:
+
+- its own configuration file, `config-<account>.ini`, with its own credentials;
+- its own TWS settings folder (`TwsSettingsPath`): some files TWS writes while running aren't
+  kept per user, and separate folders keep the auto-restart files apart;
+- its own API port (`OverrideTwsApiPort`) and, if you use commands, command port
+  (`CommandServerPort`).
+
+Its log goes to its own folder automatically. Each IBKR username can only be logged in once at a
+time.
+
+### Live and paper with deploy.ps1
+
+`scripts/deploy.ps1` (in the source repository) sets this up for a `live` and a `paper` account:
+
+| | live | paper |
+|---|---|---|
+| Start with | `ibc.ps1 start live` | `ibc.ps1 start paper` |
+| Shortcuts | `IBC (TWS live)` (and `IBC (Gateway live)` if IB Gateway is installed) | `IBC (TWS paper)` (and `IBC (Gateway paper)`) |
+| Configuration file | `config-live.ini` | `config-paper.ini` |
+| TWS settings folder | `C:\Jts\live` | `C:\Jts\paper` |
+| Log folder | `C:\IBC\Logs\live` | `C:\IBC\Logs\paper` |
+| API port / command port | 7496 / 7462 | 7497 / 7463 |
+
+The configuration files are created only if they don't exist yet; fill in `IbLoginId` and
+`IbPassword` in each. A new settings folder starts as a copy of your existing TWS settings
+(`jts.ini`, `xmlopt.dat` and the user folders, without the logs), so both instances start with
+your layouts. Existing configuration files and settings folders are left alone when you deploy
 again.
 
-Since there is little point having TWS running after Friday evening (because
-the markets are closed), you can use the `ClosedownAt` setting in `config.ini`
-to tidily shut down TWS automatically after the Friday trading session has
-finished.
+### Setting it up by hand
 
-Note that TWS's auto-restart mechanism does not operate if TWS is shut down
-other than at the auto-restart time: for example via the File | Exit menu, or
-due to power failure or a program bug. This situation can be handled by
-configuring the task to run periodically (say every 10 minutes) during the week
-so that if TWS crashes or is manually shut down, the task is automatically
-restarted. Make sure the task is also configured to prevent a new instance if
-one is already running.
+1. Create a configuration file per account in `%USERPROFILE%\Documents\IBC`, eg
+   `config-live.ini` and `config-paper.ini`, from `config.ini` (or start from the short files in
+   the repository's `samples/MultipleUsers` folder).
+2. In each, set the credentials, `TradingMode`, a different `TwsSettingsPath` (eg
+   `C:\\Jts\\live` and `C:\\Jts\\paper`), a different `OverrideTwsApiPort` and, if you use
+   commands, a different `CommandServerPort`. Leave `IbDir` empty.
+3. To keep your current layouts, copy `jts.ini`, `xmlopt.dat` and the user folders from your
+   current settings folder (eg `C:\Jts\1051`) into each new settings folder before the first
+   start. Otherwise they start empty; you can also use TWS's `File > Save Settings As...` and
+   `File > Settings Recovery...`.
+4. Run `ibc.ps1 start live` and `ibc.ps1 start paper`.
 
-Note also that if you set up the task to run at user logon, and you configure
-your computer's BIOS to power on when power is restored after failure, and to
-then log on automatically, this will ensure TWS is restarted after a power
-outage. (Information about how to make your computer log on automatically is
-easily available on the internet: but make sure you understand the security
-implications of autologon to Windows).
+### Different TWS versions per account
 
-**IMPORTANT** Make sure you use the `-Inline` argument to `ibc.ps1 start`
-when starting IBC from Task Scheduler. Otherwise IBC starts
-and runs correctly, but Task Scheduler is not aware of it: in particular Task
-Scheduler does not show the task as running. This prevents correct operation of
-Task Scheduler features such as killing the task after a specified elapsed
-time, and periodic restarts as described above will result in multiple IBC
-instances being started, with unpredictable results. The reason for this is
-that if `-Inline` is not used, `ibc.ps1 start` creates a new window to run
-IBC in, and Task Scheduler is not aware of this, so the task ends as soon as
-this new window has been created.
+Each account can run its own TWS version: set `TwsMajorVersion` in its configuration file, for
+example `TwsMajorVersion=1050` in `config-paper.ini` to try a version with your paper account
+while live uses another. Install each version in the normal way; each goes into its own
+`C:\Jts\<version>` folder.
 
-A sample scheduled task is included in the IBC distribution ZIP, called `Start
-TWS (autorestart).xml`. You can import this into your Task Scheduler if you
-are running Windows. After importing it, you will need to enable it and change
-the user account it runs under. 
+## 11. Scheduled tasks
 
-Here is a description of how this task works. It is easiest to understand this
-if you first import the task and view the details in the Task Scheduler
-console, rather than examining the xml file.
-
-* The task starts TWS on Sunday at 22:15 (there is nothing special about this
-time: choose whatever is convenient for you). As far as Task Scheduler is
-concerned, the task is the instantiation of the ibc.ps1 script (rather
-than the instantiation of IBC by the script), and when auto-restart is
-configured the script instantiation persists right through the various auto-
-restarts until TWS is shut down without auto-restart. Thus once the task is
-started it continues until the script ends, for example as a result of normal
-user exit from TWS (eg File | Exit), or a STOP command sent to IBC's command
-server, or a system crash.
-
-* If there is a premature exit during the week, we would like the task to be
-restarted automatically. So the task specification tells Task Scheduler to
-restart the task every 10 minutes, but only if there isn't an instance already
-running.
-
-* We don't want the task to repeat forever, so we limit the repetition to just
-less than 1 day (23 hours 55 mins).
-
-* We add extra starts for Monday to Thursday, at the same time as the 'main'
-start (ie 22:15). This, coupled with the repetition limit, ensures that the
-task is restarted if it ends at any point up to 22:10 on Friday.
-
-* We also allow the task to be started 'on demand', ie by running it manually
-from the Task Scheduler console.
-
-This is not a complete description of all the task's properties, but it should
-be enough for you to undertand the principles behind it. There are other
-properties that you may want to consider using: for example, you could add
-another trigger to start the task as soon as the relevant user logs on.
-
-### Multiple IBC Instances
-
-You may want to run more than one instance of TWS or the Gateway on the same
-computer, perhaps simultaneously. Here are some reasons you might want to do
-this:
-
-- you want to run both your live and paper-trading IBKR accounts. This is
-  especially true if you want to get market data from both accounts, as IBKR
-  will only allow this if both TWS instances are on the same computer
-  (unless you don't try to run them at the same time)
-
-- you have multiple logins for your live IBKR account, and want to run
-  TWS for both, perhaps at the same time
-
-- you trade on behalf of others, perhaps your family, friends or clients,
-  who each have their own accounts, but you want to run TWS instances for
-  all these accounts on one powerful computer
-
-- you want to trade in different regions at different times
-
-- you want to test a new version of TWS in your paper trading account at
-  the same time as using your live account in a previous version
-
-When TWS runs, it stores a large number of settings in a folder structure
-(these settings may also be stored in IBKR's servers, but this may not be a
-useful option if you want to use multiple TWS instances). By default, TWS
-stores this settings folder structure in the TWS installation folder. For
-each username, it creates a separate folder structure. Note however that
-there are some files that TWS creates while running that are not separated
-by username in this way, and only one instance of TWS can access them at a
-time. So you can run multiple TWS instances with no problem provided each
-instance is logged in to a different username, AND you don't try to run them
-at the same time.
-
-However, by using the `TwsSettingsPath` setting in the configuration file,
-you can tell TWS to store its settings whereever you like.
-So to have multiple IBC instances operating simultaneously, each instance
-needs a different settings folder. Note that you do not need to copy the TWS
-.jar files themselves - you can load TWS from the same installation folder for
-each instance.
-
-Each instance has its own configuration file, `config-<account>.ini`, and is
-started with `ibc.ps1 start <account>`. Its log goes to its own folder
-automatically.
-
-The `scripts/deploy.ps1` script in the IBC source repository sets up `live`
-and `paper` accounts this way,and the `samples/MultipleUsers` folder there has
-an example for two users.
-
-As a concrete example, let's take the first scenario described above: you want
-to run both your live and paper trading accounts without them interfering with
-each other in any way. But before describing the steps to achieve this, here's
-something to bear in mind: if you have already been running either or both the
-live and paper TWSs, you may have already spent quite some time configuring
-them, and you won't want to have to repeat this work. TWS provides a means of
-saving and subsequently restoring settings (the `Save Settings As...`
-and `Settings Recovery...` commands on the `File` menu, and you can use these to
-keep your current settings in a temporary location, and then restore them once
-you've finished setting up the two instances.
-
-So:
-
-- install TWS into the default location (`C:\Jts`)
-
-- create two new folders `C:\JtsLive` and `C:\JtsPaper` to store the settings
-
-- create two IBC configuration files called `config-live.ini` and
-  `config-paper.ini` in `%USERPROFILE%\Documents\IBC`
-
-- set the `TwsSettingsPath` setting in them to the relevant folder, ie
-  `TwsSettingsPath=C:\\JtsLive` and `TwsSettingsPath=C:\\JtsPaper`, and leave
-  `IbDir` empty (if they differ, auto-restart fails)
-
-- set the `IbLoginId` and `IbPassword` to the live or paper account values as
-  appropriate, and give each file a different `OverrideTwsApiPort` and, if
-  you use commands, `CommandServerPort`
-
-- now you can run `ibc.ps1 start live` and `ibc.ps1 start paper`, and each
-  will start a separate instance of TWS connected to a different account, with
-  its settings stored in separate folders and its log in `C:\IBC\Logs\live` or
-  `C:\IBC\Logs\paper`.
-
-#### Using different TWS versions simultaneously
-
-To use more than one version of TWS (for example for testing a new version
-with your paper-trading account while also using a previous version for
-your live account), you just need to install the required versions in the
-normal way. Version 952 and later of TWS have installers that automatically
-place the relevant files in separate folders named according to the version
-number.
-
-Then follow the advice in the previous section and ensure that each
-instance has the correct value for the `TwsMajorVersion` setting in its
-configuration file.
-
-
-### How to run TWS/Gateway without IBC when IBC is installed
-
-In order for auto-restart to work properly with IBC, `ibc.ps1` renames the
-TWS/Gateway executables, by appending a '1' digit to the filename (the file
-extension is unchanged). If these files have their
-original names when auto-restart occurs, then TWS/Gateway do indeed restart
-but they will not be running under IBC, so all the benefits of IBC will be
-lost. Note that for this reason you should not attempt to rename these files
-back to their original names while IBC is running.
-
-`ibc.ps1` does not rename the executables to their original names when IBC
-exits.
-
-This causes a potential confusion if you then want to subsequently run
-TWS/Gateway without using IBC. Here are some suggestions:
-
-- you can rename the excutables back to their original names before running
-them
-
-- you can run TWS/Gateway directly from the renamed executables. For example
-you can double-clickon C:\\Jts\\1022\\tws1.exe and it will run fine
-
-- you can edit the IB-supplied desktop shortcuts to refer to the renamed
-executable; or you could create additional shortcuts to the renamed executables
-
-- if you have a script to run TWS/Gateway without IBC, you can modify the
-script to use either the original or renamed executable, which ever currently
-exists
-
-- you could install an additional copy of TWS/Gateway into a different root
-folder, and only run that instance without IBC. You can use the
-`TwsSettingsPath` launcher setting in the configuration file to ensure that
-the same settings are used for both instances.
-
-
-### Command Server
-
-IBC incorporates a command server that enables some aspects of its operation to
-be influenced by commands from external sources.
-
-To issue a command to the command server, the command source must first
-establish a TCP/IP connection to the relevant port, which is specified in the 
-`CommandServerPort` setting in `config.ini`.
-
-The source then sends the required command (see below) as plain text, and may
-then read the socket for any returned data.
-
-The source may send more than one consecutive command. When it is finished, it
-should send an EXIT command (though this is not necessary after a STOP command
-since that closes the socket automatically). 
-
-Use `ibc.ps1` in the IBC folder to send commands. It connects to
-the command server directly and displays IBC's reply, for example:
+Task Scheduler can start IBC automatically. The task's action runs
+`C:\Program Files\PowerShell\7\pwsh.exe` (or the `pwsh.exe` in
+`%LOCALAPPDATA%\Microsoft\WindowsApps` for a Microsoft Store install) with arguments like these:
 
 ```
-.\ibc.ps1 stop
-.\ibc.ps1 restart -Config "$env:USERPROFILE\Documents\IBC\config-alice.ini"
-.\ibc.ps1 enableapi -Server 192.168.1.20 -Port 7462
+-NoProfile -ExecutionPolicy Bypass -File "C:\IBC\ibc.ps1" start paper -Inline
 ```
 
-It reads the port (and the `BindAddress` setting, if set) from your
-`config.ini`, so normally you don't need to give them. `-Config` selects a
-different configuration file, and `-Port` and `-Server` override both.
-Run `.\ibc.ps1 help` for the full list of commands and options. Its exit code
-is 0 if IBC accepted the command, 1 if IBC rejected it, 2 if IBC couldn't be
-reached, and 3 if the port couldn't be determined.
+**Always use `-Inline` in a scheduled task.** Without it, `ibc.ps1` opens IBC in a new window and
+exits at once, so Task Scheduler thinks the task has finished: it can't show it as running, can't
+stop it after a time limit, and repeating the task would start IBC several times.
 
-The available commands are listed below. Note that none of these commands have
-any parameters.
+When you create the task:
 
-STOP
+- select **Run only when user is logged on**, so that you can see and use TWS. ("Run whether
+  user is logged on or not" starts it in a separate, invisible session.) You'll need to be logged
+  on to Windows when the task runs; Windows can be set to log on automatically at startup, but
+  consider the security implications;
+- change the settings so that Windows doesn't stop the task after a certain time.
 
->  Tells IBC to shut down TWS tidily, as if the user had invoked the File | Exit
->  menu command.
+With auto-restart set, the task keeps running all week, because `ibc.ps1` stays running through
+the daily restarts. It ends when TWS is shut down without a restart: at the Sunday cold restart
+it continues, but File > Exit, a STOP command, `ClosedownAt`, or a crash end it.
 
-RESTART
+The sample task `Start TWS (autorestart).xml` in the IBC folder shows a useful pattern. Import it
+into Task Scheduler, then enable it and set the user account it runs under (and add an account
+name after `start` in its arguments if you use one):
 
-> Initiates an auto-restart of TWS, as if the time specified in TWS's auto-
-> restart setting (in the Lock and Exit section of the Global Configuration
-> Dialog) has arrived. Note that auto-restart (and hence the RESTART command)
-> does not require 2nd factor authentication because the credentials from the
-> current session are re-used. Note that this command canot be used to bypass
-> the IBKR requirement that TWS be shut down completely at some point during
-> Sundays.
-  
-> For TWS, the RESTART command is implemented by using the File | Restart...
-> menu command, and the restart is initiated immediately.
-  
-> For the Gateway, this is not possible, because it does not have this menu
-> command. So in this case, IBC sets the auto-restart value in the Lock and
-> Exit section of the Global Configuration Dialog: the value used is the start
-> of the next minute if less than 58 seconds into the current minute; otherwise
-> the start of the minute after that. Gateway also displays a transparent
-> overlay with a countdown timer over the Gateway main window.
-  
-> Note that for Gateway this auto-restart time will still be in force after the
-> restart: to avoid further restarts at that time, you should use the
-> `AutoRestartTime` setting in `config.ini' to override the carried-forward
-> time. Alternatively issue another RESTART command after restart has completed
-> to set the auto-restart time to its usual value.
+- it starts TWS on Sunday at 22:15 (choose any convenient time);
+- it repeats every 10 minutes, but only if it isn't already running, so that TWS is started again
+  if it stops during the week;
+- the repetition is limited to just under a day, and there are extra starts at the same time
+  Monday to Thursday, so that it's covered until Friday evening;
+- it can also be started by hand from the Task Scheduler console.
 
-PAUSE
+You can disable a task (right-click > Disable) without losing its definition.
 
-> Tells IBC to shut down TWS tidily, similarly to the STOP command, but
-> preserves the user's current login credentials so that when IBC is next
-> started, the user's session will be resumed without the need to login.
->
-> Note that PAUSE-ing an IBC process running TWS makes use of the TWS
-> `File | Restart...` menu command, to generate the file containing the login
-> credentials to be carried forward (TWS is prevented from creating the
-> new IBC process that restart normally uses). This occurs immediately, and the
-> process typically exits within about 5 seconds. 
+## 12. Commands
 
-> For a Gateway process, the situation is very different, because Gateway
-> doesn't have a `File | Restart...` menu command. So IBC has to use a different
-> method to get the credentials file created, which happens at the end of the
-> current minute (or the end of the next minute if the current minute ends
-> imminently). As a result, and allowing for the overhead of processing the
-> PAUSE command and shutting down the process, it can take up to about 75
-> seconds for Gateway to exit after receiving the PAUSE command.
->
-> An example use of the PAUSE command is for situations wheere the 
-> computer is powered by an Uninterruptible Power Supply (UPS). In the event of
-> impending power failure, typically where the remaining charge in the UPS has
-> fallen below some threshold, arrangements can be made for a notification to be
-> received by various means, and whatever receives the notofication can send a
-> PAUSE command to IBC. When power is recovered, IBC can be restarted
-> automatically and the previous TWS session will be resumed.
->
-> There are many ways for such notifications to be caused: this topic is beyond
-> the scope of this User Guide.
->
-> Note that you cannot use PAUSE and a subsequent IBC restart to bypass the
-> IBKR requirement for TWS to be fully shut down on Sunday. Credentials
-> preserved by use of PAUSE will be invalidated at the start of the next week,
-> and it will not be possible to restart the session.
+IBC can accept commands from `ibc.ps1` or other programs, on this computer or another one. Set
+`CommandServerPort` in the configuration file (eg `7462`) and restart IBC to turn this on.
 
-ENABLEAPI 
+```
+C:\IBC\ibc.ps1 stop
+C:\IBC\ibc.ps1 restart paper
+C:\IBC\ibc.ps1 enableapi -Server 192.168.1.20 -Port 7462
+```
 
-> Ensures that the ‘Enable ActiveX and Socket Clients’ checkbox in the API
-> configuration is set. Note that this command is a leftover from the earliest
-> days of IBC, and is of little (if any) use nowadays.
+`ibc.ps1` reads the port, and `BindAddress` if set, from the configuration file (the account name
+selects which one); `-Port` and `-Server` override them. It shows IBC's reply, and its exit code
+is 0 if IBC accepted the command, 1 if IBC rejected it, 2 if IBC couldn't be reached, and 3 if the
+port couldn't be determined.
 
-RECONNECTDATA
+IBC only accepts commands from this computer and from the addresses in the `ControlFrom` setting.
+`BindAddress` limits which of the computer's addresses it listens on.
 
-> Tells TWS/Gateway to refresh all its market data connections. This is the
-> same as the user pressing Ctrl-Alt-F.
+The commands:
 
-RECONNECTACCOUNT
+**stop**: shuts TWS down tidily, as if File > Exit had been used.
 
-> Tells TWS/Gateway to reconnect to the IB login server. This is the same as
-> the user pressing Ctrl-Alt-R.
-  
-EXIT
+**restart**: restarts TWS without logging in again, as if the auto-restart time had arrived. For
+TWS this happens at once (File > Restart). The Gateway has no restart command, so IBC sets its
+auto-restart time to the next minute (shown with a countdown); that time stays set afterwards, so
+use `AutoRestartTime` to put it back. A restart can't avoid the weekly login on Sunday.
 
-> Closes the connection to the command server.
+**pause**: shuts TWS down like stop, but keeps the session, so that the next `ibc.ps1 start`
+resumes it without logging in. For TWS this takes a few seconds; for the Gateway up to about 75
+seconds. It's useful, for example, when a UPS reports that the power is about to fail. The kept
+session expires at the weekly login.
 
+**enableapi**: ticks "Enable ActiveX and Socket Clients" in TWS's API settings (TWS only; rarely
+needed nowadays).
 
+**reconnectdata**: makes TWS reconnect to IBKR's market data servers (like Ctrl+Alt+F).
 
+**reconnectaccount**: makes TWS reconnect to IBKR's account server (like Ctrl+Alt+R).
 
-### Any Questions?
+Other programs can send commands too: open a TCP connection to the port, send the command as a
+line of text (eg `STOP`), and read the reply, which starts with `OK` or `ERROR`. Send `EXIT` to
+close the connection when finished (not needed after STOP).
 
-If you need assistance with running IBC, or have any queries or
-suggestions for improvement, you should join the IBC User Group
-at:
+## 13. Running TWS without IBC
 
-[https://groups.io/g/ibcalpha](https://groups.io/g/ibcalpha)
+Because IBC renames `tws.exe` to `tws1.exe` (see *Starting and stopping*), the TWS desktop
+shortcut stops working. To run TWS by hand:
 
-If you're convinced you've found a bug in IBC, please report it
-via either the IBC User Group or the GitHub Issue Tracker at:
+- double-click `C:\Jts\<version>\tws1.exe`, or point the desktop shortcut at it; or
+- rename it back to `tws.exe` (not while IBC is running: an auto-restart would then start TWS
+  without IBC).
 
-[https://github.com/IbcAlpha/IBC/issues](https://github.com/IbcAlpha/IBC/issues)
+Remember that started by hand, TWS uses the settings in its version folder, not an IBC instance's
+own settings folder such as `C:\Jts\paper`, so changes made in one don't appear in the other.
 
-Please provide as much evidence as you can, especially the versions of
-IBC and TWS/Gateway you're using and a full description of the
-incorrect behaviour you're seeing. The IBC logile contains a lot of information
-that can often be used to rapidly diagnose the source of a problem, so
-attaching it to your report is always a good idea.
+## 14. Troubleshooting
 
-### Changes from IBController
+Look in the log first (`C:\IBC\Logs\<account>\...`). IBC's window shows its location, and when
+something fails it shows the error and an exit code.
 
-Although IBC has been forked from the original IBController project, it is not
-identical and there are several important differences that you'll need to take
-account of if you're switching from IBController to IBC.
+| Exit code / message | Meaning |
+|---------------------|---------|
+| 1001 Can't find suitable Java | the Java that came with TWS wasn't found; check the TWS installation or set `JavaPath` |
+| 1002 No offline TWS/Gateway installation found | install the offline TWS, or set `TwsPath`/`TwsMajorVersion` |
+| 1003 | a launcher setting has an invalid value (eg `On2FATimeout`) |
+| 1004 ... is not installed: can't find jars folder | `TwsMajorVersion` names a version that isn't installed, or it's the self-updating TWS |
+| 1006 IBC configuration file ... does not exist | create `config.ini` (or `config-<account>.ini`) in `%USERPROFILE%\Documents\IBC`, or check the account name |
+| 1007 | the TWS installation has no `tws.vmoptions`/`ibgateway.vmoptions` |
+| 1008 | the TWS settings folder doesn't exist and couldn't be created |
+| 1009 The log file ... could not be opened | another instance uses the same log folder; give each its own |
+| 1100 | an unexpected error inside IBC; see the log |
+| 1107 | IBC.jar couldn't find TWS's classes: the TWS installation is incomplete |
+| 1111 | the IBKR Mobile alert wasn't approved in time and IBC was set to exit (see *Second factor authentication*) |
+| 1112 | the TWS login dialog didn't appear in time; IBC starts again |
 
-Here are the main differences between IBC and IBController:
+Other common problems:
 
-1. The program file is now called IBC.jar.
+- **PowerShell refuses to run `ibc.ps1`** ("not digitally signed" or "cannot be loaded"): the
+  files are still marked as downloaded; run `Get-ChildItem C:\IBC -Recurse | Unblock-File`.
+  Use the shortcuts, which bypass this, or run `ibc.ps1` from PowerShell 7 (`pwsh`), not Windows
+  PowerShell 5.1.
+- **IBC doesn't recognise a dialog**: TWS must be in English. The log shows the windows IBC saw;
+  `LogStructureScope` and `LogStructureWhen` in `config.ini` make it record their contents in
+  detail.
+- **The login fails with "existing session"**: the same username is logged in elsewhere (eg TWS
+  started by hand); see `ExistingSessionDetectedAction`.
+- **TWS starts without IBC after a restart**: `tws.exe` was renamed back while IBC was running.
 
-2. Changes to the settings file:
-
-   - in IBController, the configuration settings were held in a file called
-    `IBController.ini` by default, whereas the equivalent file in IBC
-	is called `config.ini`
-
-   - the setting previously called `ForceTwsApiPort` has been renamed
-	`OverrideTwsApiPort`
-
-   - the `AcceptIncomingConnectionAction` setting previously had a default of
-	`accept`. This default has now changed to `manual`, which means that the
-	user must now explicitly configure IBC to automatically accept API
-	connections from unknown computers.
-
-   - the settings `PasswordEncrypted` and `FIXPasswordEncrypted` have been
-    removed, as has the facility to 'encrypt' these passwords.
-	
-   - the `IbControllerPort` setting has been renamed to `CommandServerPort`,
-     and its default value is 0 (zero), which is taken to mean 'do not
-	 start the command server'
-
-   - the `IbControlFrom` setting has been renamed to `ControlFrom`
-
-   - the `IbBindAddress` setting has been renamed to `BindAddress`
-
-3. Changes to top-level script names:
-
-       IBControllerStart.bat 				-> 	ibc.ps1 start
-	   IBControllerGatewayStart.bat 		-> 	ibc.ps1 start -Gateway
-       IBControllerStop.bat 				-> 	ibc.ps1 stop
-
-	
+For help, or to report a bug, open an issue on
+[github.com/zdomokos/IBC](https://github.com/zdomokos/IBC/issues), with the IBC and TWS versions
+and the log file.

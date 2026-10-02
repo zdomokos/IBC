@@ -1,3 +1,6 @@
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+
 plugins {
     java
 }
@@ -15,9 +18,19 @@ dependencies {
     if (ibcBin != null) compileOnly(fileTree(ibcBin) { include("**/*.jar") })
 }
 
-val ibcVersion = project.version.toString()
+// The version is the build date, yy.M.d (eg 26.10.1), unless -PibcVersion=<version> is
+// given (eg for a second release on the same day). A ValueSource is used so that the
+// configuration cache notices when the date changes.
+abstract class BuildDateVersion : ValueSource<String, ValueSourceParameters.None> {
+    override fun obtain(): String =
+        LocalDate.now().format(DateTimeFormatter.ofPattern("yy.M.d"))
+}
+val ibcVersion: String = providers.gradleProperty("ibcVersion")
+    .orElse(providers.of(BuildDateVersion::class) {})
+    .get()
+version = ibcVersion
 
-// Generate IbcVersionInfo from the version in gradle.properties
+// Generate IbcVersionInfo from the version
 val generateVersionInfo = tasks.register("generateVersionInfo") {
     val outDir = layout.buildDirectory.dir("generated/sources/version")
     inputs.property("version", ibcVersion)

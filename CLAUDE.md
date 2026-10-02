@@ -13,7 +13,7 @@ This fork is Windows-only for now: the Linux/macOS `.sh` scripts were removed an
 - `src/main/java/ibcalpha/ibc/`: the Java source (one package).
 - `src/main/dist/`: everything else in the distribution ZIP (`ibc.ps1`, `config.ini`, `README.txt`, the two `.lnk` shortcuts, `Start TWS (autorestart).xml`).
 - `scripts/deploy.ps1`: developer tool that builds and installs the ZIP locally.
-- `docs/`: user guide (`userguide.md`, generated `userguide.pdf`, `makedocs/`), `reference/` design notes, `spec/` review findings, `upstream-README.md` (archived).
+- `docs/`: user guide (`userguide.md`; `makedocs/makeUserGuide.ps1` generates `build/userguide.pdf`, which isn't committed), `reference/` design notes, `spec/` review findings, `upstream-README.md` (archived).
 - `samples/`: `MultipleUsers` (config files) and `IbcLoader` (embedding IBC in a Java app; has its own `.bat` files and an old `IBC.jar`).
 
 ## Build
@@ -26,14 +26,14 @@ gradlew          # default "dist": build/dist/IBC-<ver>-windows.zip (IBC.jar + L
 gradlew clean    # delete build/
 ```
 
-- The version lives only in `gradle.properties`. `IbcVersionInfo` is generated into `build/generated/sources/version`, so it doesn't exist in `src/`. The `dist` task stamps it into `ibc.ps1` (`@IBC_VERSION@`, Gradle `ReplaceTokens`).
+- The version is the build date, `yy.M.d` (eg `26.10.1`), computed in `build.gradle.kts` through a `ValueSource` (so the configuration cache notices a new day); `-PibcVersion=<v>` overrides it. `scripts/deploy.ps1` deploys the newest `build/dist/IBC-*-windows.zip`. `IbcVersionInfo` is generated into `build/generated/sources/version`, so it doesn't exist in `src/`. The `dist` task stamps it into `ibc.ps1` (`@IBC_VERSION@`, Gradle `ReplaceTokens`).
 - Nothing the build produces is committed; output only goes to `build/`.
 - Compilation uses `-Xlint:all`. The configuration cache is enabled, so build logic must not touch `project` or script-level values at execution time (compute values at configuration time into locals).
 - There is no test suite and no linter. The only way to verify a change is to run IBC against a real TWS and Gateway.
 
 `scripts/deploy.ps1 <folder>` builds (`-SkipBuild` to skip) and installs the ZIP into a local folder. It also generates `live` and `paper` instances: shortcuts running `ibc.ps1 start <a>` (only applicable shortcuts are created: plain ones need `<ConfigFolder>\config.ini`, Gateway ones an installed `<TwsPath>\ibgateway\<n>\jars`; stale generated ones are deleted), `<ConfigFolder>\config-<a>.ini` created only if missing (an existing one without `TwsSettingsPath` gets that line appended), settings folder `<TwsPath>\<a>` seeded on creation by copying `jts.ini`, `xmlopt.dat` and the 40-letter user folders minus `*.ibgzenc` logs from the existing settings folder, ports 7496/7462 and 7497/7463; `-NoAccounts` skips. The `config.ini` template in the destination is kept on redeploy unless `-OverwriteSettings`; files from older layouts are reported, not deleted. Never deploy to the user's real `C:\IBC` without asking.
 
-User guide PDF: `docs/makedocs/makeUserGuide.ps1` (pandoc + xelatex) builds `docs/userguide.pdf` from `docs/userguide.md`.
+User guide PDF: `docs/makedocs/makeUserGuide.ps1` (pandoc + xelatex) builds `build/userguide.pdf` from `docs/userguide.md`; it isn't committed.
 
 ## ibc.ps1
 
