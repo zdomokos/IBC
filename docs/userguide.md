@@ -476,6 +476,9 @@ started or been scheduled. A successful reply is status 200 with `"ok": true`; a
 422 if it doesn't apply (eg `enableapi` on the Gateway), 401 for a missing or wrong token, and
 503 while TWS is still being started.
 
+IBC logs each command it receives, its reply, and every refused request. These lines go to the
+log file and are also shown in the IBC window.
+
 ```
 PS> Invoke-RestMethod http://127.0.0.1:7470/api/v1/status
 PS> Invoke-RestMethod -Method Post http://127.0.0.1:7471/api/v1/restart

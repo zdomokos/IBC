@@ -697,8 +697,12 @@ try {
             Write-Log "`"$javaExe`" $($javaArgs -join ' ')"
             Write-Log
 
-            # IBC's console output goes to the log
-            & $javaExe @javaArgs 2>$null | ForEach-Object { Write-Log $_ }
+            # IBC's console output goes to the log; REST API activity is also shown in
+            # this window (unless the log already is this window)
+            & $javaExe @javaArgs 2>$null | ForEach-Object {
+                Write-Log $_
+                if ($script:logWriter -and $_ -like '* IBC: RestServer *') { Write-Host $_ }
+            }
             $exitCode = $LASTEXITCODE
 
             Write-Log 'Program has exited'
