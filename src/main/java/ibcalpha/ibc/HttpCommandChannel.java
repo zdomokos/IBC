@@ -77,7 +77,10 @@ final class HttpCommandChannel extends CommandChannel {
         if (error != null) json.append(", \"error\": ").append(Json.quote(error));
         json.append(", \"messages\": ").append(Json.array(mMessages)).append('}');
 
-        RestServer.sendJson(mExchange, statusFor(error), json.toString());
+        final int status = statusFor(error);
+        Utils.logToConsole("RestServer replied " + status + " to " + mCommand +
+                           (error == null ? "" : ": " + error));
+        RestServer.sendJson(mExchange, status, json.toString());
     }
 
     private static int statusFor(String error) {
