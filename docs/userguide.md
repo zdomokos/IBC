@@ -342,7 +342,9 @@ time.
 | REST API port | 7470 | 7471 |
 
 The configuration files are created only if they don't exist yet; fill in `IbLoginId` and
-`IbPassword` in each. A new settings folder starts as a copy of your existing TWS settings
+`IbPassword` in each. Each also has commented-out `RestBindAddress` (this computer's network
+address), `RestToken` (a newly generated secret) and `ControlFrom` lines: uncomment them, and put
+the right addresses in `ControlFrom`, to use the REST API from other computers. A new settings folder starts as a copy of your existing TWS settings
 (`jts.ini`, `xmlopt.dat` and the user folders, without the logs), so both instances start with
 your layouts. Existing configuration files and settings folders are left alone when you deploy
 again.
