@@ -18,128 +18,23 @@
 
 package ibcalpha.ibc;
 
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
-import java.net.Socket;
-import java.net.SocketException;
+/**
+ * The way a command reports its outcome to whoever sent it. The command server
+ * uses a SocketCommandChannel (plain-text lines over TCP), the REST server an
+ * HttpCommandChannel (one JSON response).
+ *
+ * A command writes any number of info messages, then an ack or a nack, then
+ * calls close() once it has nothing more to say. close() may be called more
+ * than once.
+ */
+abstract class CommandChannel {
 
-final class CommandChannel {
+    abstract void writeAck(String info);
 
-    private static final String _Prompt = Settings.settings().getString("CommandPrompt", "");
-    private static final boolean _SuppressInfo = Settings.settings().getBoolean("SuppressInfoMessages", true);
+    abstract void writeInfo(String info);
 
-    private Socket mSocket;
-    private BufferedReader mInstream = null;
-    private BufferedWriter mOutstream = null;
+    abstract void writeNack(String info);
 
-    CommandChannel(Socket socket) {
-
-        mSocket = socket;
-        if (! setupStreams()) return;
-
-        writeInfo("IBC Command Server");
-    }
-
-    void close() {
-        try {
-            if (mSocket == null || mSocket.isClosed()) return;
-            
-            Utils.logToConsole("Closing command channel");
-            mSocket.shutdownInput();
-            mSocket.shutdownOutput();
-
-            mInstream.close();
-            mInstream = null;
-
-            mOutstream.close();
-            mOutstream = null;
-
-            mSocket.close();
-            mSocket = null;
-        } catch (SocketException e) {
-            // the socket was reset by the client - ignore
-            Utils.logException(e);
-        } catch (IOException e) {
-            // ignore
-            Utils.logException(e);
-        }
-    }
-
-    String getCommand() {
-        String cmd = null;
-
-        if (mInstream == null) return null;
-
-        try {
-            cmd = mInstream.readLine();
-            while (cmd != null && cmd.trim().isEmpty()) {
-                writePrompt();
-                cmd = mInstream.readLine();
-            }
-
-            if (cmd != null) Utils.logToConsole("CommandServer received command: " + cmd);
-        } catch (SocketException e) {
-            // the socket was reset by the client
-            Utils.logException(e);
-            close();
-        } catch (IOException e) {
-            Utils.logException(e);
-            close();
-        }
-        return cmd;
-    }
-
-    void writeAck(String info) {
-        replyLine("OK " + info);
-    }
-
-    final void writeInfo(String info) {
-        if (! _SuppressInfo) replyLine("INFO " + info);
-    }
-
-    void writeNack(String info) {
-        replyLine("ERROR " + info);
-    }
-
-    void writePrompt() {
-        if (! _Prompt.isEmpty()) reply(_Prompt);
-    }
-
-    private void reply(String message) {
-        reply(message, false);
-    }
-
-    private void reply(String message, boolean addNewline) {
-        if (mOutstream == null) return;
-        try {
-            mOutstream.write(message);
-            if (addNewline) mOutstream.newLine();
-            mOutstream.flush();
-        } catch (SocketException e) {
-            // the socket was reset by the client
-            Utils.logException(e);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void replyLine(String message) {
-        reply(message,true);
-    }
-
-    private boolean setupStreams() {
-        try {
-            mInstream = new BufferedReader(new InputStreamReader(mSocket.getInputStream()));
-            mOutstream = new BufferedWriter(new OutputStreamWriter(mSocket.getOutputStream()));
-            return true;
-        } catch (IOException e) {
-            // this is most likely a result of the user closing the command connection
-            Utils.logException(e);
-            return false;
-        }
-    }
+    abstract void close();
 
 }

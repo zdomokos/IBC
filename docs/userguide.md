@@ -167,6 +167,7 @@ you're most likely to need:
 | `ExistingSessionDetectedAction` | What to do when the same username is already logged in elsewhere. |
 | `OverrideTwsApiPort` | The port API programs connect to. Instances running at the same time need different ports. |
 | `CommandServerPort` | The port for commands such as `ibc.ps1 stop`. `0` (the default) turns commands off. |
+| `RestPort` | The port for the REST API (commands and status over HTTP). `0` (the default) turns it off. See *Commands*. |
 | `AutoRestartTime`, `ColdRestartTime`, `ClosedownAt` | daily restart, Sunday cold restart, closedown: see *Keeping TWS running all week* |
 | `ReloginAfterSecondFactorAuthenticationTimeout` | see *Second factor authentication* |
 
@@ -321,7 +322,7 @@ Each instance needs:
 - its own TWS settings folder (`TwsSettingsPath`): some files TWS writes while running aren't
   kept per user, and separate folders keep the auto-restart files apart;
 - its own API port (`OverrideTwsApiPort`) and, if you use commands, command port
-  (`CommandServerPort`).
+  (`CommandServerPort`) and REST API port (`RestPort`).
 
 Its log goes to its own folder automatically. Each IBKR username can only be logged in once at a
 time.
@@ -338,6 +339,7 @@ time.
 | TWS settings folder | `C:\Jts\live` | `C:\Jts\paper` |
 | Log folder | `C:\IBC\Logs\live` | `C:\IBC\Logs\paper` |
 | API port / command port | 7496 / 7462 | 7497 / 7463 |
+| REST API port | 7470 | 7471 |
 
 The configuration files are created only if they don't exist yet; fill in `IbLoginId` and
 `IbPassword` in each. A new settings folder starts as a copy of your existing TWS settings
@@ -352,7 +354,7 @@ again.
    the repository's `samples/MultipleUsers` folder).
 2. In each, set the credentials, `TradingMode`, a different `TwsSettingsPath` (eg
    `C:\\Jts\\live` and `C:\\Jts\\paper`), a different `OverrideTwsApiPort` and, if you use
-   commands, a different `CommandServerPort`. Leave `IbDir` empty.
+   commands, a different `CommandServerPort` and `RestPort`. Leave `IbDir` empty.
 3. To keep your current layouts, copy `jts.ini`, `xmlopt.dat` and the user folders from your
    current settings folder (eg `C:\Jts\1051`) into each new settings folder before the first
    start. Otherwise they start empty; you can also use TWS's `File > Save Settings As...` and
@@ -447,7 +449,54 @@ needed nowadays).
 
 Other programs can send commands too: open a TCP connection to the port, send the command as a
 line of text (eg `STOP`), and read the reply, which starts with `OK` or `ERROR`. Send `EXIT` to
-close the connection when finished (not needed after STOP).
+close the connection when finished (not needed after STOP). The REST API (below) is usually
+easier.
+
+### REST API
+
+The REST API accepts the same commands as HTTP requests with JSON replies, and also reports IBC's
+status. Set `RestPort` in the configuration file (eg `7470`; `deploy.ps1` sets 7470 for live and
+7471 for paper) and restart IBC. Then open `http://127.0.0.1:7470/docs` in a browser: it
+describes every endpoint and lets you try them out. That page loads Swagger UI from the internet;
+the description itself is at `/openapi.yaml`, for other tools.
+
+| Request | Does |
+|---------|------|
+| `GET /api/v1/status` | IBC version, TWS or Gateway, login state, whether TWS is ready or shutting down |
+| `POST /api/v1/stop` | stop |
+| `POST /api/v1/restart` | restart |
+| `POST /api/v1/pause` | pause |
+| `POST /api/v1/enableapi` | enableapi |
+| `POST /api/v1/reconnectdata` | reconnectdata |
+| `POST /api/v1/reconnectaccount` | reconnectaccount |
+
+Each command replies once it has finished, or, for restart and pause, once the restart has
+started or been scheduled. A successful reply is status 200 with `"ok": true`; an error has
+`"ok": false` and an `error` message, with status 409 if the same command is already in progress,
+422 if it doesn't apply (eg `enableapi` on the Gateway), 401 for a missing or wrong token, and
+503 while TWS is still being started.
+
+```
+PS> Invoke-RestMethod http://127.0.0.1:7470/api/v1/status
+PS> Invoke-RestMethod -Method Post http://127.0.0.1:7471/api/v1/restart
+> curl -X POST http://127.0.0.1:7470/api/v1/stop
+```
+
+**Security.** By default the REST API listens on `127.0.0.1` only, so only programs on this
+computer can use it, and it refuses requests made by web pages from other sites. To protect it
+from other programs on this computer as well, set `RestToken` to a secret of at least 32
+characters; every request must then carry it:
+
+```
+PS> $h = @{ Authorization = 'Bearer <RestToken>' }
+PS> Invoke-RestMethod -Headers $h http://127.0.0.1:7470/api/v1/status
+> curl -H "Authorization: Bearer <RestToken>" http://127.0.0.1:7470/api/v1/status
+```
+
+On the `/docs` page, use **Authorize** to enter it. To use the REST API from other computers, set
+`RestBindAddress` to this computer's address (or `0.0.0.0`), set `RestToken` (required then), and
+list the other computers in `ControlFrom`. Requests aren't encrypted, so do this only on a network
+you trust, or put an HTTPS proxy in front.
 
 ## 13. Running TWS without IBC
 

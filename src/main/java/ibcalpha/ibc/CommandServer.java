@@ -65,7 +65,7 @@ class CommandServer
                 Socket socket = getClient();
 
                 if (socket != null) {
-                    MyCachedThreadPool.getInstance().execute(new CommandDispatcher(new CommandChannel(socket)));
+                    MyCachedThreadPool.getInstance().execute(new CommandDispatcher(new SocketCommandChannel(socket)));
                 }
             }
         }

@@ -1,0 +1,278 @@
+openapi: 3.0.3
+info:
+  title: IBC REST API
+  version: "@IBC_VERSION@"
+  description: |
+    Controls the TWS or IB Gateway instance that this IBC runs. Each command does
+    the same as the command server command of the same name (`ibc.ps1 stop` etc.)
+    and returns once it has completed or been scheduled.
+
+    **The commands act on the real TWS/Gateway.** "Try it out" on `stop`,
+    `restart` or `pause` really closes it.
+
+    Authentication: when `RestToken` is set in the IBC config file, every `/api`
+    request needs `Authorization: Bearer <RestToken>` (use **Authorize** above).
+    Without a token, the server only listens on a loopback address.
+
+tags:
+  - name: status
+  - name: commands
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/v1/status:
+    get:
+      tags: [status]
+      summary: IBC and session status
+      operationId: getStatus
+      responses:
+        "200":
+          description: Current status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/v1/stop:
+    post:
+      tags: [commands]
+      summary: Close TWS/Gateway and IBC
+      description: |
+        Responds, then exits: through File > Exit (File > Close for the Gateway)
+        once logged in, otherwise at once. The `ibc.ps1` restart loop doesn't
+        restart it.
+      operationId: stop
+      responses:
+        "200":
+          $ref: "#/components/responses/CommandOk"
+        "409":
+          $ref: "#/components/responses/CommandConflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/CommandFailed"
+        "503":
+          $ref: "#/components/responses/Starting"
+
+  /api/v1/restart:
+    post:
+      tags: [commands]
+      summary: Restart TWS/Gateway
+      description: |
+        Uses File > Restart where TWS has it, otherwise sets the auto-restart time
+        to the next minute. Responds once the restart has been started or
+        scheduled. Not valid for the FIX Gateway.
+      operationId: restart
+      responses:
+        "200":
+          $ref: "#/components/responses/CommandOk"
+        "409":
+          $ref: "#/components/responses/CommandConflict"
+        "422":
+          $ref: "#/components/responses/CommandNotValid"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/CommandFailed"
+        "503":
+          $ref: "#/components/responses/Starting"
+
+  /api/v1/pause:
+    post:
+      tags: [commands]
+      summary: Shut down, keeping the session
+      description: |
+        Shuts TWS/Gateway down like `stop`, but keeps the session, so that the
+        next `ibc.ps1 start` resumes it without logging in. Responds once the
+        shutdown has been started or scheduled. Not valid for the FIX Gateway.
+      operationId: pause
+      responses:
+        "200":
+          $ref: "#/components/responses/CommandOk"
+        "409":
+          $ref: "#/components/responses/CommandConflict"
+        "422":
+          $ref: "#/components/responses/CommandNotValid"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/CommandFailed"
+        "503":
+          $ref: "#/components/responses/Starting"
+
+  /api/v1/enableapi:
+    post:
+      tags: [commands]
+      summary: Enable TWS API connections
+      description: |
+        Ticks "Enable ActiveX and Socket Clients" in the TWS settings. Responds
+        with `configured` or `already configured`. Not valid for the Gateway.
+      operationId: enableApi
+      responses:
+        "200":
+          $ref: "#/components/responses/CommandOk"
+        "422":
+          $ref: "#/components/responses/CommandNotValid"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/CommandFailed"
+        "503":
+          $ref: "#/components/responses/Starting"
+
+  /api/v1/reconnectdata:
+    post:
+      tags: [commands]
+      summary: Reconnect market data (Ctrl+Alt+F)
+      operationId: reconnectData
+      responses:
+        "200":
+          $ref: "#/components/responses/CommandOk"
+        "422":
+          $ref: "#/components/responses/CommandNotValid"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/CommandFailed"
+        "503":
+          $ref: "#/components/responses/Starting"
+
+  /api/v1/reconnectaccount:
+    post:
+      tags: [commands]
+      summary: Reconnect to the account server (Ctrl+Alt+R)
+      operationId: reconnectAccount
+      responses:
+        "200":
+          $ref: "#/components/responses/CommandOk"
+        "422":
+          $ref: "#/components/responses/CommandNotValid"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/CommandFailed"
+        "503":
+          $ref: "#/components/responses/Starting"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: The RestToken setting from the IBC config file.
+
+  schemas:
+    Status:
+      type: object
+      properties:
+        ibcVersion:
+          type: string
+          example: "26.10.2"
+        application:
+          type: string
+          enum: [TWS, Gateway]
+        fix:
+          type: boolean
+          nullable: true
+          description: Whether this is a FIX session; null until the session has started.
+        sessionStarted:
+          type: boolean
+        loginState:
+          type: string
+          enum: [LOGGED_OUT, LOGGED_IN, LOGGING_IN, TWO_FA_IN_PROGRESS, LOGIN_FAILED, AWAITING_CREDENTIALS]
+        ready:
+          type: boolean
+          description: TWS/Gateway has finished starting up (its main window is available).
+        shuttingDown:
+          type: boolean
+          description: A stop is in progress.
+
+    CommandResult:
+      type: object
+      required: [ok, command, messages]
+      properties:
+        ok:
+          type: boolean
+        command:
+          type: string
+          example: RESTART
+        error:
+          type: string
+          description: Present when ok is false.
+        messages:
+          type: array
+          items:
+            type: string
+          example: ["RESTART in progress"]
+
+    Error:
+      type: object
+      required: [ok, error]
+      properties:
+        ok:
+          type: boolean
+          example: false
+        error:
+          type: string
+
+  responses:
+    CommandOk:
+      description: The command completed, or was started or scheduled.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/CommandResult"
+    CommandConflict:
+      description: The same command is already in progress.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/CommandResult"
+    CommandNotValid:
+      description: The command doesn't apply to this session (Gateway or FIX).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/CommandResult"
+    CommandFailed:
+      description: The command failed or didn't report an outcome; see the IBC log.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/CommandResult"
+    Unauthorized:
+      description: Missing or wrong bearer token.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: The client address isn't permitted (ControlFrom), or the request came from another web site.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Starting:
+      description: TWS/Gateway hasn't been started yet; try again shortly.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"

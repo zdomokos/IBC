@@ -20,13 +20,14 @@ which can run at the same time:
   log folder           <Destination>\Logs\live         <Destination>\Logs\paper
   API port             7496                            7497
   command port         7462                            7463
+  REST API port        7470                            7471
   shortcuts            IBC (TWS live)                  IBC (TWS paper)
                        IBC (Gateway live)              IBC (Gateway paper)
 
 The config files are only created if they don't exist, and are otherwise
-never changed, except that one without a TwsSettingsPath setting (made by an
-earlier version of this script) gets that line added, so that the two
-accounts keep separate settings folders. Fill in IbLoginId and IbPassword in
+never changed, except that one made by an earlier version of this script gets
+the settings it lacks added: TwsSettingsPath, so that the two accounts keep
+separate settings folders, and RestPort. Fill in IbLoginId and IbPassword in
 each.
 
 A new live or paper TWS settings folder starts as a copy of your existing TWS
@@ -111,8 +112,8 @@ $ConfigFolder = & $fullPath $ConfigFolder
 
 $accounts = if ($NoAccounts) { @() } else {
     @(
-        @{ Name = 'live';  ApiPort = 7496; CommandPort = 7462; AcceptNonBrokerageAccountWarning = 'no' }
-        @{ Name = 'paper'; ApiPort = 7497; CommandPort = 7463; AcceptNonBrokerageAccountWarning = 'yes' }
+        @{ Name = 'live';  ApiPort = 7496; CommandPort = 7462; RestPort = 7470; AcceptNonBrokerageAccountWarning = 'no' }
+        @{ Name = 'paper'; ApiPort = 7497; CommandPort = 7463; RestPort = 7471; AcceptNonBrokerageAccountWarning = 'yes' }
     )
 }
 
@@ -250,8 +251,9 @@ foreach ($account in $accounts) {
     }
 
     if (Test-Path -LiteralPath $configFile) {
-        # made by an earlier version of this script, without TwsSettingsPath: add it, so
-        # the accounts don't share a settings folder
+        # made by an earlier version of this script: add the settings it lacks
+        $added = $false
+        # without TwsSettingsPath the accounts would share a settings folder
         if (-not (Select-String -LiteralPath $configFile -Pattern '^\s*TwsSettingsPath\s*=\s*\S' -Quiet)) {
             Add-Content -LiteralPath $configFile -Value @(
                 ''
@@ -259,8 +261,18 @@ foreach ($account in $accounts) {
                 "# This account's own TWS settings folder (added by deploy.ps1)."
                 ''
                 "TwsSettingsPath=$(ConvertTo-PropertyValue $settingsFolder)")
-            $updated.Add($configFile)
+            $added = $true
         }
+        if (-not (Select-String -LiteralPath $configFile -Pattern '^\s*RestPort\s*=' -Quiet)) {
+            Add-Content -LiteralPath $configFile -Value @(
+                ''
+                ''
+                "# The port for IBC's REST API (added by deploy.ps1). Set to 0 to disable it."
+                ''
+                "RestPort=$($account.RestPort)")
+            $added = $true
+        }
+        if ($added) { $updated.Add($configFile) }
         continue
     }
 
@@ -309,6 +321,14 @@ OverrideTwsApiPort=$($account.ApiPort)
 # the same time need different ports. Set to 0 to disable commands.
 
 CommandServerPort=$($account.CommandPort)
+
+
+# The port for IBC's REST API (HTTP/JSON commands and status; try it at
+# http://127.0.0.1:$($account.RestPort)/docs). It only accepts requests from this
+# computer unless RestBindAddress, RestToken and ControlFrom are set: see config.ini.
+# Instances running at the same time need different ports. Set to 0 to disable it.
+
+RestPort=$($account.RestPort)
 
 
 # Whether to accept the warning TWS shows when logging in to a paper-trading
@@ -429,7 +449,7 @@ if ($created) {
     $created | ForEach-Object { Write-Host "    $_" }
 }
 if ($updated) {
-    Write-Host 'Added a TwsSettingsPath line to these existing config files:'
+    Write-Host 'Added missing settings (TwsSettingsPath, RestPort) to these existing config files:'
     $updated | ForEach-Object { Write-Host "    $_" }
 }
 if ($kept) {

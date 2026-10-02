@@ -276,6 +276,8 @@ public class IbcTws {
 
             startCommandServer();
 
+            startRestServer();
+
             startShutdownTimerIfRequired();
 
             createToolkitListener();
@@ -480,6 +482,16 @@ public class IbcTws {
 
     private static void startCommandServer() {
         MyCachedThreadPool.getInstance().execute(new CommandServer());
+    }
+
+    private static void startRestServer() {
+        try {
+            RestServer.start();
+        } catch (LinkageError e) {
+            // the Java runtime lacks the jdk.httpserver module
+            Utils.logException(e);
+            Utils.logError("RestServer is not started: this Java runtime has no HTTP server (module jdk.httpserver)");
+        }
     }
 
     private static boolean isColdRestart = false;

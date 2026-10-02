@@ -13,7 +13,7 @@ This fork is Windows-only for now: the Linux/macOS `.sh` scripts were removed an
 - `src/main/java/ibcalpha/ibc/`: the Java source (one package).
 - `src/main/dist/`: the other files in the distribution ZIP (`ibc.ps1`, `config.ini`, the two `.lnk` shortcuts, `Start TWS (autorestart).xml`); the `dist` task adds `IBC.jar`, `LICENSE.txt` and `docs/userguide.md`.
 - `scripts/deploy.ps1`: developer tool that builds and installs the ZIP locally.
-- `docs/`: user guide (`userguide.md`; `makedocs/makeUserGuide.ps1` generates `build/userguide.pdf`, which isn't committed), `reference/` design notes, `spec/` review findings, `upstream-README.md` (archived).
+- `docs/`: user guide (`userguide.md`; `makedocs/makeUserGuide.ps1` generates `build/userguide.pdf`, which isn't committed), `reference/` design notes, `spec/` review findings and feature plans, `upstream-README.md` (archived).
 - `samples/`: `MultipleUsers` (config files) and `IbcLoader` (embedding IBC in a Java app; has its own `.bat` files and an old `IBC.jar`).
 
 ## Build
@@ -31,7 +31,7 @@ gradlew clean    # delete build/
 - Compilation uses `-Xlint:all`. The configuration cache is enabled, so build logic must not touch `project` or script-level values at execution time (compute values at configuration time into locals).
 - There is no test suite and no linter. The only way to verify a change is to run IBC against a real TWS and Gateway.
 
-`scripts/deploy.ps1 <folder>` builds (`-SkipBuild` to skip) and installs the ZIP into a local folder. It also generates `live` and `paper` instances: shortcuts running `ibc.ps1 start <a>` (only applicable shortcuts are created: plain ones need `<ConfigFolder>\config.ini`, Gateway ones an installed `<TwsPath>\ibgateway\<n>\jars`; stale generated ones are deleted), `<ConfigFolder>\config-<a>.ini` created only if missing (an existing one without `TwsSettingsPath` gets that line appended), settings folder `<TwsPath>\<a>` seeded on creation by copying `jts.ini`, `xmlopt.dat` and the 40-letter user folders minus `*.ibgzenc` logs from the existing settings folder, ports 7496/7462 and 7497/7463; `-NoAccounts` skips. The `config.ini` template in the destination is kept on redeploy unless `-OverwriteSettings`; files from older layouts are reported, not deleted. Never deploy to the user's real `C:\IBC` without asking.
+`scripts/deploy.ps1 <folder>` builds (`-SkipBuild` to skip) and installs the ZIP into a local folder. It also generates `live` and `paper` instances: shortcuts running `ibc.ps1 start <a>` (only applicable shortcuts are created: plain ones need `<ConfigFolder>\config.ini`, Gateway ones an installed `<TwsPath>\ibgateway\<n>\jars`; stale generated ones are deleted), `<ConfigFolder>\config-<a>.ini` created only if missing (an existing one without `TwsSettingsPath` or `RestPort` gets those lines appended), settings folder `<TwsPath>\<a>` seeded on creation by copying `jts.ini`, `xmlopt.dat` and the 40-letter user folders minus `*.ibgzenc` logs from the existing settings folder, ports 7496/7462/7470 and 7497/7463/7471 (API/command/REST); `-NoAccounts` skips. The `config.ini` template in the destination is kept on redeploy unless `-OverwriteSettings`; files from older layouts are reported, not deleted. Never deploy to the user's real `C:\IBC` without asking.
 
 User guide PDF: `docs/makedocs/makeUserGuide.ps1` (pandoc + xelatex) builds `build/userguide.pdf` from `docs/userguide.md`; it isn't committed.
 
@@ -64,7 +64,7 @@ The only script shipped is `src/main/dist/ibc.ps1` (PowerShell 7, `#Requires -Ve
 
 **Session state.** `SessionManager` tracks Gateway vs TWS vs FIX mode and readiness (`awaitReady`). Many tasks branch on `SessionManager.isGateway()` / `isFIX()`.
 
-**Command server.** `CommandServer` listens on `CommandServerPort` (restricted by `ControlFrom`/`BindAddress`). `CommandDispatcher` handles `STOP`, `RESTART`, `ENABLEAPI`, `RECONNECTDATA`, `RECONNECTACCOUNT`, `PAUSE` and `EXIT`. `ibc.ps1 stop` etc. send these commands.
+**Command server.** `CommandServer` listens on `CommandServerPort` (restricted by `ControlFrom`/`BindAddress`). `CommandDispatcher` handles `STOP`, `RESTART`, `ENABLEAPI`, `RECONNECTDATA`, `RECONNECTACCOUNT`, `PAUSE` and `EXIT`. `ibc.ps1 stop` etc. send these commands. `RestServer` (`RestPort`, off by default) exposes the same commands over HTTP/JSON plus `/api/v1/status`, `/openapi.yaml` and a Swagger UI page at `/docs`; both servers share `CommandDispatcher.dispatch` and report through a `CommandChannel` (`SocketCommandChannel` / `HttpCommandChannel`).
 
 ## Contribution constraints (from CONTRIBUTING.md)
 

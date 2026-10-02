@@ -82,7 +82,7 @@ same time (`-NoAccounts` skips this):
 | Config file | `%USERPROFILE%\Documents\IBC\config-live.ini` | `...\config-paper.ini` |
 | TWS settings folder | `C:\Jts\live` | `C:\Jts\paper` |
 | Log folder | `<folder>\Logs\live` | `<folder>\Logs\paper` |
-| API port / command port | 7496 / 7462 | 7497 / 7463 |
+| API port / command port / REST API port | 7496 / 7462 / 7470 | 7497 / 7463 / 7471 |
 
 The two config files are created only if they don't exist: fill in `IbLoginId` and `IbPassword`
 in each. Otherwise they're never changed, except that one made by an earlier version of the
@@ -147,7 +147,8 @@ fill in your credentials (for a named account, name it `config-<account>.ini`), 
 The `IBC (TWS)` and `IBC (Gateway)` shortcuts run `ibc.ps1 start`. It finds the newest TWS
 installed in `C:\Jts` and its existing settings by itself; the optional launcher settings at the
 top of `config.ini` (`TwsMajorVersion`, `TwsSettingsPath`, `LogPath`, ...) override that.
-Commands need `CommandServerPort` set in the config file.
+Commands need `CommandServerPort` set in the config file. The same commands, and IBC's status,
+are also available as a REST API when `RestPort` is set (try it at `http://127.0.0.1:<RestPort>/docs`).
 
 ### Running several TWS instances for different users
 

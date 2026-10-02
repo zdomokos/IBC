@@ -259,7 +259,8 @@ Optional, enabled by `CommandServerPort` (0 = off).
 - Clients are allowed if they come from the bound address, the loopback address, or any
   entry in `ControlFrom` (IP address or hostname).
 - Each connection gets a `CommandDispatcher` on a pool thread, with a line-oriented text
-  protocol over `CommandChannel`:
+  protocol over a `SocketCommandChannel`. `CommandDispatcher.dispatch(cmd, channel)` runs one
+  command; the REST server (section 8.1) calls it too:
 
 | Command | Effect |
 |---------|--------|
@@ -273,6 +274,27 @@ Optional, enabled by `CommandServerPort` (0 = off).
 - Replies: `OK <info>`, `ERROR <info>`, optional `INFO <info>` (hidden unless
   `SuppressInfoMessages=no`), and an optional `CommandPrompt`.
 - `src/main/dist/ibc.ps1` is the bundled client (`ibc.ps1 stop`, `ibc.ps1 restart`, ...).
+
+### 8.1 REST server
+
+Optional, enabled by `RestPort` (0 = off); started by `IbcTws.load()` right after the command
+server. If the Java runtime lacks the `jdk.httpserver` module, IBC logs it and carries on.
+
+- `RestServer` runs the JDK's `com.sun.net.httpserver.HttpServer` on `RestBindAddress`
+  (default `127.0.0.1`) with a fixed pool of 4 daemon threads.
+- Paths: `/api/v1/status` (GET), `/api/v1/{stop,restart,pause,enableapi,reconnectdata,reconnectaccount}`
+  (POST), `/openapi.yaml` and `/docs` (a Swagger UI page loading `swagger-ui-dist` from jsDelivr),
+  both from resources in `IBC.jar` (`src/main/resources/ibcalpha/ibc`).
+- Access: client must be loopback, the bound address, or a `ControlFrom` entry (resolved once at
+  startup, never by reverse DNS). `/api` requests also need `Authorization: Bearer <RestToken>`
+  when `RestToken` is set (required unless bound to loopback), and are refused if they carry an
+  `Origin` other than the server's own, or, without a token, a `Host` that isn't a loopback name
+  (DNS rebinding).
+- A command runs on the request thread through `CommandDispatcher.dispatch` with an
+  `HttpCommandChannel`, which collects acks, nacks and info messages and sends one JSON response
+  when the task calls `close()`, or when the handler returns. `StopTask` closes its channel before
+  exiting, so the reply is written first. Nacks map to 409 ("already in progress"), 422 ("not
+  valid for") or 500; requests before `SessionManager.startSession()` get 503.
 
 ## 9. Diagnostics: window structure logging
 

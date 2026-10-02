@@ -47,7 +47,11 @@ public class SessionManager {
         return _isRestart;
     }
     
-    private static boolean _isSessionStarted = false;
+    private static volatile boolean _isSessionStarted = false;
+    static boolean isSessionStarted() {
+        return _isSessionStarted;
+    }
+
     static void startSession() {
         _isSessionStarted = true;
         
@@ -76,6 +80,10 @@ public class SessionManager {
     private static volatile boolean _InitialisationCompleted;
     private static final Lock lock = new ReentrantLock();
     private static final Condition initialised = lock.newCondition();
+    static boolean isReady() {
+        return _InitialisationCompleted;
+    }
+
     static void awaitReady() {
         /*
          * For the gateway, the main form is loaded right at the start, and long before

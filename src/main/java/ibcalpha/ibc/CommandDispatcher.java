@@ -26,12 +26,12 @@ import javax.swing.JFrame;
 class CommandDispatcher
         implements Runnable {
 
-    private final CommandChannel mChannel;
+    private final SocketCommandChannel mChannel;
 
     private static final int SHORTCUT_MODIFIERS = Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx() | KeyEvent.ALT_DOWN_MASK; 
 
             
-    CommandDispatcher(CommandChannel channel) {
+    CommandDispatcher(SocketCommandChannel channel) {
         mChannel = channel;
     }
 
@@ -41,45 +41,54 @@ class CommandDispatcher
             if (cmd.equalsIgnoreCase("EXIT")) {
                 mChannel.writeAck("Goodbye");
                 break;
-            } else if (cmd.equalsIgnoreCase("STOP")) {
-                handleStopCommand();
-            } else if (cmd.equalsIgnoreCase("ENABLEAPI")) {
-                handleEnableAPICommand();
-            } else if (cmd.equalsIgnoreCase("RECONNECTDATA")) {
-            	handleReconnectDataCommand();
-            } else if (cmd.equalsIgnoreCase("RECONNECTACCOUNT")) {
-            	handleReconnectAccountCommand();
-            } else if (cmd.equalsIgnoreCase("RESTART")) {
-            	handleRestartCommand();
-            } else if (cmd.equalsIgnoreCase("PAUSE")) {
-            	handlePauseCommand();
-            } else {
-                handleInvalidCommand(cmd);
             }
+            dispatch(cmd, mChannel);
             mChannel.writePrompt();
             cmd = mChannel.getCommand();
         }
         mChannel.close();
     }
 
-    private void handleInvalidCommand(String cmd) {
-        mChannel.writeNack("Command invalid");
+    /**
+     * Runs one command on the current thread, reporting the outcome through
+     * channel. Used by both the command server and the REST server.
+     */
+    static void dispatch(String cmd, CommandChannel channel) {
+        if (cmd.equalsIgnoreCase("STOP")) {
+            handleStopCommand(channel);
+        } else if (cmd.equalsIgnoreCase("ENABLEAPI")) {
+            handleEnableAPICommand(channel);
+        } else if (cmd.equalsIgnoreCase("RECONNECTDATA")) {
+            handleReconnectDataCommand(channel);
+        } else if (cmd.equalsIgnoreCase("RECONNECTACCOUNT")) {
+            handleReconnectAccountCommand(channel);
+        } else if (cmd.equalsIgnoreCase("RESTART")) {
+            handleRestartCommand(channel);
+        } else if (cmd.equalsIgnoreCase("PAUSE")) {
+            handlePauseCommand(channel);
+        } else {
+            handleInvalidCommand(cmd, channel);
+        }
+    }
+
+    private static void handleInvalidCommand(String cmd, CommandChannel channel) {
+        channel.writeNack("Command invalid");
         Utils.logError("CommandServer: invalid command received: " + cmd);
     }
 
-    private void handleEnableAPICommand() {
+    private static void handleEnableAPICommand(CommandChannel channel) {
         if (SessionManager.isGateway()) {
-            mChannel.writeNack("ENABLEAPI is not valid for the IB Gateway");
+            channel.writeNack("ENABLEAPI is not valid for the IB Gateway");
             return;
         }
 
         // run on the current thread
-        (new ConfigurationTask(new EnableApiTask(mChannel))).execute();
+        (new ConfigurationTask(new EnableApiTask(channel))).execute();
    }
 
-    private void handleReconnectDataCommand() {
+    private static void handleReconnectDataCommand(CommandChannel channel) {
         if (SessionManager.isFIX()) {
-            mChannel.writeNack("RECONNECTDATA is not valid for the FIX Gateway");
+            channel.writeNack("RECONNECTDATA is not valid for the FIX Gateway");
             return;
         }
         JFrame jf = MainWindowManager.mainWindowManager().getMainWindow(1, TimeUnit.MILLISECONDS);
@@ -91,12 +100,12 @@ class CommandDispatcher
         jf.dispatchEvent(typed);
         jf.dispatchEvent(released);
   
-        mChannel.writeAck("");
+        channel.writeAck("");
    }
 
-    private void handleReconnectAccountCommand() {
+    private static void handleReconnectAccountCommand(CommandChannel channel) {
         if (SessionManager.isFIX()) {
-            mChannel.writeNack("RECONNECTACCOUNT is not valid for the FIX Gateway");
+            channel.writeNack("RECONNECTACCOUNT is not valid for the FIX Gateway");
             return;
         }
         JFrame jf = MainWindowManager.mainWindowManager().getMainWindow();
@@ -108,26 +117,26 @@ class CommandDispatcher
         jf.dispatchEvent(typed);
         jf.dispatchEvent(released);
 
-        mChannel.writeAck("");
+        channel.writeAck("");
     }
 
-    private void handleStopCommand() {
-        (new StopTask(mChannel, false, "STOP command")).run();     // run on the current thread
+    private static void handleStopCommand(CommandChannel channel) {
+        (new StopTask(channel, false, "STOP command")).run();     // run on the current thread
     }
     
-    private void handleRestartCommand() {
+    private static void handleRestartCommand(CommandChannel channel) {
         if (SessionManager.isFIX()) {
-            mChannel.writeNack("RESTART is not valid for the FIX Gateway");
+            channel.writeNack("RESTART is not valid for the FIX Gateway");
             return;
         }
-        (new RestartTask(mChannel, false)).run();     // run on the current thread
+        (new RestartTask(channel, false)).run();     // run on the current thread
     }
     
-    private void handlePauseCommand() {
+    private static void handlePauseCommand(CommandChannel channel) {
         if (SessionManager.isFIX()) {
-            mChannel.writeNack("PAUSE is not valid for the FIX Gateway");
+            channel.writeNack("PAUSE is not valid for the FIX Gateway");
             return;
         }
-        (new RestartTask(mChannel, true)).run();     // run on the current thread
+        (new RestartTask(channel, true)).run();     // run on the current thread
     }
 }
