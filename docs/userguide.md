@@ -82,7 +82,8 @@ The installed folder contains:
 | `IBC.jar` | the IBC program |
 | `IBC (TWS).lnk`, `IBC (Gateway).lnk` | shortcuts that run `ibc.ps1 start` |
 | `Start TWS (autorestart).xml` | sample Task Scheduler task |
-| `README.txt`, `LICENSE.txt` | brief instructions, licence |
+| `userguide.md` | this guide |
+| `LICENSE.txt` | the licence |
 
 IBC adds a `Logs` folder when it runs.
 
@@ -212,7 +213,7 @@ something goes wrong, it turns red, shows the error, and waits for a key press.
 With `-Inline`, IBC runs in the current window instead of opening a new one. That's needed for
 Task Scheduler.
 
-Run `ibc.ps1 help` for all commands and options.
+Run `ibc.ps1 help` (or `ibc.ps1 --help`) for all commands and options.
 
 ### The log
 

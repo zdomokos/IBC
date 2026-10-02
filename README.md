@@ -25,7 +25,7 @@ IBC only works with the **offline** (standalone) TWS installer, not the self-upd
 | Path | Contents |
 |------|----------|
 | `src/main/java/` | the Java source (package `ibcalpha.ibc`) |
-| `src/main/dist/` | the other files in the distribution ZIP: `ibc.ps1`, `config.ini`, `README.txt`, shortcuts, sample scheduled task |
+| `src/main/dist/` | the other files in the distribution ZIP: `ibc.ps1`, `config.ini`, shortcuts, sample scheduled task (the ZIP also gets `IBC.jar`, `LICENSE.txt` and the user guide) |
 | `scripts/` | developer tools: `deploy.ps1` |
 | `docs/` | user guide and design notes (see [Documentation](#documentation)) |
 | `samples/MultipleUsers/` | config files for running TWS for several users at once |

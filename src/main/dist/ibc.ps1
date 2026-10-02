@@ -18,7 +18,7 @@ Commands:
   reconnectdata     Reconnect to IB's market data servers
   reconnectaccount  Reconnect to IB's account server
   version           Show the IBC version (also --version)
-  help              Show this help
+  help              Show this help (also --help, -h)
 
 Accounts: <account> selects the configuration file
 <ConfigFolder>\config-<account>.ini, eg 'ibc.ps1 start paper' uses
@@ -102,6 +102,9 @@ Commands: the command server port. Overrides CommandServerPort.
 .PARAMETER Server
 Commands: the name or IP address of the computer running IBC.
 
+.PARAMETER Help
+Show this help, like the help command.
+
 .PARAMETER Version
 Show the IBC version, like the version command.
 
@@ -119,7 +122,7 @@ Commands: how long to wait for IBC's reply. Default 30.
 param(
     [Parameter(Position = 0)]
     [ValidateSet('start', 'stop', 'restart', 'pause', 'enableapi', 'reconnectdata', 'reconnectaccount',
-                 'version', '--version', 'help')]
+                 'version', '--version', 'help', '--help')]
     [string]$Command = 'help',
 
     [Parameter(Position = 1)]
@@ -144,7 +147,9 @@ param(
     [ValidateRange(1, 3600)]
     [int]$TimeoutSeconds = 30,
 
-    [switch]$Version
+    [switch]$Version,
+
+    [switch]$Help
 )
 
 $ErrorActionPreference = 'Stop'
@@ -159,7 +164,7 @@ if ($Version -or $Command -in 'version', '--version') {
     exit 0
 }
 
-if ($Command -eq 'help') {
+if ($Help -or $Command -in 'help', '--help') {
     (Get-Help $PSCommandPath).Description.Text
     exit 0
 }

@@ -11,7 +11,7 @@ This fork is Windows-only for now: the Linux/macOS `.sh` scripts were removed an
 ## Layout
 
 - `src/main/java/ibcalpha/ibc/`: the Java source (one package).
-- `src/main/dist/`: everything else in the distribution ZIP (`ibc.ps1`, `config.ini`, `README.txt`, the two `.lnk` shortcuts, `Start TWS (autorestart).xml`).
+- `src/main/dist/`: the other files in the distribution ZIP (`ibc.ps1`, `config.ini`, the two `.lnk` shortcuts, `Start TWS (autorestart).xml`); the `dist` task adds `IBC.jar`, `LICENSE.txt` and `docs/userguide.md`.
 - `scripts/deploy.ps1`: developer tool that builds and installs the ZIP locally.
 - `docs/`: user guide (`userguide.md`; `makedocs/makeUserGuide.ps1` generates `build/userguide.pdf`, which isn't committed), `reference/` design notes, `spec/` review findings, `upstream-README.md` (archived).
 - `samples/`: `MultipleUsers` (config files) and `IbcLoader` (embedding IBC in a Java app; has its own `.bat` files and an old `IBC.jar`).
@@ -22,7 +22,7 @@ Gradle (Kotlin DSL, `build.gradle.kts`) via the committed wrapper, so only a JDK
 
 ```
 gradlew jar      # build/libs/IBC.jar
-gradlew          # default "dist": build/dist/IBC-<ver>-windows.zip (IBC.jar + LICENSE.txt + src/main/dist)
+gradlew          # default "dist": build/dist/IBC-<ver>-windows.zip (IBC.jar + LICENSE.txt + docs/userguide.md + src/main/dist)
 gradlew clean    # delete build/
 ```
 

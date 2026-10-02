@@ -74,7 +74,8 @@ tasks.jar {
     archiveFileName = "IBC.jar"
 }
 
-// The Windows distribution: IBC.jar, the files in src/main/dist and the licence.
+// The Windows distribution: IBC.jar, the files in src/main/dist, the user guide and the
+// licence.
 // The version is stamped into ibc.ps1 ('ibc.ps1 version').
 val dist = tasks.register<Zip>("dist") {
     group = "distribution"
@@ -84,6 +85,7 @@ val dist = tasks.register<Zip>("dist") {
     inputs.property("ibcVersion", ibcVersion)
     from(tasks.jar)
     from("LICENSE.txt")
+    from("docs/userguide.md")
     from("src/main/dist") {
         val tokens = mapOf("IBC_VERSION" to ibcVersion)
         filesMatching("ibc.ps1") {
