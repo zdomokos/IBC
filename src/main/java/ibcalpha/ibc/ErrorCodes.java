@@ -33,4 +33,6 @@ public final class ErrorCodes {
     public static final int INVALID_STATE = 1110;
     public static final int SECOND_FACTOR_AUTH_LOGIN_TIMED_OUT = 1111;
     public static final int LOGIN_DIALOG_DISPLAY_TIMED_OUT = 1112;
+    public static final int SHUTDOWN_HUNG = 1113;
+    public static final int RESTART_HUNG = 1114;
 }

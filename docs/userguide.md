@@ -45,6 +45,11 @@ To run your live and paper accounts side by side, see *Several accounts*.
 5.1 built into Windows. Install it with `winget install Microsoft.PowerShell` (or from Microsoft's
 website). The shortcuts and the sample scheduled task use it automatically.
 
+Don't use the Microsoft Store version of PowerShell for unattended running. When the Store updates
+it, it closes the running copy, so the IBC window disappears and TWS is no longer restarted. The
+winget and MSI installs go into `C:\Program Files\PowerShell\7` and don't update themselves.
+`deploy.ps1` uses that copy when it's there. The IBC log warns when PowerShell is the Store version.
+
 **The offline TWS or IB Gateway.** IBKR offers two kinds of TWS: a self-updating one and an
 offline (standalone) one that never changes after installation. **IBC only works with the
 offline version.** It installs into a folder named after its version, for example `C:\Jts\1051`
@@ -295,6 +300,22 @@ happen. A scheduled task that runs every few minutes can start it again (see *Sc
 If the Java VM itself crashes (it leaves an `hs_err_pid*.log` in the settings folder), `ibc.ps1`
 restarts IBC after 10 seconds. There is no `autorestart` file then, so you have to log in again.
 It gives up after more than 3 crashes in 30 minutes.
+
+**If the restart hangs.** Occasionally TWS's Java VM doesn't finish exiting during the restart.
+For example, TWS 10.50 on Java 25 has deadlocked in its own exit code. TWS's window is gone, but
+the process stays and `ibc.ps1` waits for it forever. IBC watches for this. If the Java VM is still
+running `ShutdownWatchdogSeconds` (default 120) after TWS showed *Restart in progress* or started
+shutting down, IBC writes a thread dump to the log and ends the Java VM:
+
+- exit code 1114 means a hung auto-restart. `ibc.ps1` starts TWS again: without a login if TWS
+  had written its `autorestart` file, otherwise with a full login. If the restart was a `pause`,
+  IBC stays paused instead.
+- exit code 1113 means some other shutdown hung. `ibc.ps1` restarts only if there's an
+  `autorestart` file.
+
+If *Restart in progress* closes but TWS carries on running, the watchdog stops without ending
+anything. In the log, look for `Shutdown watchdog:` and the thread dump after it. `ShutdownWatchdogSeconds=0`
+turns the watchdog off.
 
 ## 9. Second factor authentication
 

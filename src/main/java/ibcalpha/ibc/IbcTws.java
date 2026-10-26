@@ -280,6 +280,8 @@ public class IbcTws {
 
             startShutdownTimerIfRequired();
 
+            ShutdownWatchdog.install();
+
             createToolkitListener();
 
             startSavingTwsSettingsAutomatically();
@@ -297,6 +299,7 @@ public class IbcTws {
 
     public static void printVersionInfo() {
         Utils.logToConsole("version: " + IbcVersionInfo.IBC_VERSION);
+        Utils.logToConsole("Java VM process id: " + ProcessHandle.current().pid());
     }
 
     private static void createToolkitListener() {
@@ -336,6 +339,7 @@ public class IbcTws {
         windowHandlers.add(new LoginFailedDialogHandler());
         windowHandlers.add(new TooManyFailedLoginAttemptsDialogHandler());
         windowHandlers.add(new ShutdownProgressDialogHandler());
+        windowHandlers.add(new RestartProgressDialogHandler());
         windowHandlers.add(new BidAskLastSizeDisplayUpdateDialogHandler());
         windowHandlers.add(new LoginErrorDialogHandler());
         windowHandlers.add(new CryptoOrderConfirmationDialogHandler());

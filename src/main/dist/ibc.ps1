@@ -308,6 +308,11 @@ $E_2FA_DIALOG_TIMED_OUT = 1111
 # specified in the LoginDialogDisplayTimeout setting
 $E_LOGIN_DIALOG_DISPLAY_TIMEOUT = 1112
 
+# exit codes set by IBC's shutdown watchdog when it halts a Java VM whose shutdown
+# hung (ShutdownWatchdogSeconds): an auto-restart, or any other shutdown
+$E_SHUTDOWN_HUNG = 1113
+$E_RESTART_HUNG = 1114
+
 $app = $Gateway ? 'Gateway' : 'TWS'
 $ibcPath = $PSScriptRoot
 
@@ -519,7 +524,14 @@ try {
     Write-Log "Starting IBC version $ibcVersion on $($now.ToString('yyyy-MM-dd')) at $($now.ToString('HH:mm:ss.ff'))"
     Write-Log
     Write-Log "Operating system:  $($os.Caption) $($os.Version) $($os.OSArchitecture)"
-    Write-Log "PowerShell:  $($PSVersionTable.PSVersion)"
+    Write-Log "PowerShell:  $($PSVersionTable.PSVersion) ($PSHOME)"
+    Write-Log "Process id:  $PID"
+    if ($PSHOME -like '*\WindowsApps\*') {
+        # a Store app update closes the running app, and with it this script's restart loop
+        Write-Log 'WARNING: PowerShell is the Microsoft Store app. When the Store updates it, it closes'
+        Write-Log '         this window and TWS is no longer restarted. Use PowerShell installed from'
+        Write-Log '         the MSI or ZIP package instead (see the user guide, Requirements).'
+    }
     Write-Log
     Write-Log 'Settings:'
     Write-Log
@@ -709,8 +721,12 @@ try {
             }
             $exitCode = $LASTEXITCODE
 
-            Write-Log 'Program has exited'
+            Write-Log "Program has exited at $((Get-Date).ToString('yyyy-MM-dd HH:mm:ss')) after running for $(((Get-Date) - $startedAt).ToString('d\.hh\:mm\:ss'))"
             Write-Log "Exit code is $exitCode"
+
+            if ($exitCode -in $E_SHUTDOWN_HUNG, $E_RESTART_HUNG) {
+                Write-Log "$app's $($exitCode -eq $E_RESTART_HUNG ? 'auto-restart' : 'shutdown') hung, so IBC's watchdog halted the Java VM (thread dump above)"
+            }
 
             if ($exitCode -eq $E_2FA_DIALOG_TIMED_OUT) {
                 if ($on2FATimeout -eq 'restart') {
@@ -739,29 +755,39 @@ try {
             $crashed = $exitCode -ne 0 -and $null -ne $crashLog
             if ($crashed) {
                 Write-Log "The Java VM crashed (see $($crashLog.FullName))"
-                $now = Get-Date
-                $crashTimes.RemoveAll({ param($t) ($now - $t).TotalMinutes -gt 30 }) | Out-Null
-                $crashTimes.Add($now)
             }
 
             $restart = Get-AutoRestartOption
             $autoRestartOption = $restart.Option
-            if ($crashed -and -not $restart.RestartNeeded) {
-                if ($crashTimes.Count -gt 3) {
-                    Write-Log 'The Java VM has crashed more than 3 times in 30 minutes, so IBC will not be restarted'
+
+            # PAUSE is a restart that isn't followed, including one that hung. Otherwise the
+            # file is left over from a PAUSE that didn't go ahead, and mustn't turn the next
+            # auto-restart into a pause
+            $pauseFile = Join-Path $twsSettingsPath "PAUSE$sessionId"
+            if (Test-Path -LiteralPath $pauseFile) {
+                Remove-Item -LiteralPath $pauseFile
+                if ($restart.RestartNeeded -or $exitCode -eq $E_RESTART_HUNG) {
+                    Write-Log 'IBC is paused'
                     break
                 }
-                Write-Log 'IBC will restart shortly after the crash (full authentication will be required)'
+                Write-Log 'Deleted a PAUSE file left over from a pause that did not happen'
+            }
+
+            # a hung auto-restart is restarted even if TWS hung before writing its
+            # autorestart file
+            if (($crashed -or $exitCode -eq $E_RESTART_HUNG) -and -not $restart.RestartNeeded) {
+                $now = Get-Date
+                $crashTimes.RemoveAll({ param($t) ($now - $t).TotalMinutes -gt 30 }) | Out-Null
+                $crashTimes.Add($now)
+                if ($crashTimes.Count -gt 3) {
+                    Write-Log 'The Java VM has crashed or hung more than 3 times in 30 minutes, so IBC will not be restarted'
+                    break
+                }
+                Write-Log 'IBC will restart shortly (full authentication will be required)'
                 Start-Sleep -Seconds 10
                 continue
             }
             if ($restart.RestartNeeded) {
-                $pauseFile = Join-Path $twsSettingsPath "PAUSE$sessionId"
-                if (Test-Path -LiteralPath $pauseFile) {
-                    Remove-Item -LiteralPath $pauseFile
-                    Write-Log 'IBC is paused'
-                    break
-                }
                 Write-Log 'IBC will autorestart shortly'
                 Start-Sleep -Seconds 2
                 continue
