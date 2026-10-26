@@ -32,6 +32,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
 
@@ -39,6 +40,11 @@ class RestartTask
         implements Runnable {
 
     private static final SwitchLock _Running = new SwitchLock();
+
+    private static final long MENU_TIMEOUT_MILLIS = 30_000;
+
+    // how long after File > Restart is clicked TWS must show "Restart in progress"
+    private static final int RESTART_START_TIMEOUT_MILLIS = 60_000;
 
     private final CommandChannel mChannel;
     
@@ -73,6 +79,14 @@ class RestartTask
             }
             writeAck(mVerb + " in progress");
             restart(mPauseOnly);
+        } catch (TimeoutException ex) {
+            // TWS isn't responding (eg a shutdown has hung): report it and allow another
+            // attempt, rather than leave every later RESTART rejected as already in progress
+            Utils.logError(mVerb + " failed: " + ex.getMessage());
+            writeNack(mVerb + " failed: " + ex.getMessage());
+            mChannel.close();
+            if (mPauseOnly) pauseFlagFile().delete();
+            _Running.clear();
         } catch (Exception ex) {
             writeNack(ex.getMessage());
             Utils.exitWithException(ErrorCodes.UNHANDLED_EXCEPTION, ex);
@@ -81,19 +95,23 @@ class RestartTask
     
     private void createPauseFlagFile() {
         try {
-        new File(System.getProperty("jtsConfigDir") + 
-                 File.separator + 
-                 "PAUSE" + 
-                 System.getProperty("ibcsessionid"))
-                .createNewFile();
+            pauseFlagFile().createNewFile();
         } catch (java.io.IOException e) {
             Utils.exitWithException(ErrorCodes.UNHANDLED_EXCEPTION, e);
         }
     }
+
+    private static File pauseFlagFile() {
+        return new File(System.getProperty("jtsConfigDir") +
+                        File.separator +
+                        "PAUSE" +
+                        System.getProperty("ibcsessionid"));
+    }
     
-    void restart(final boolean pauseOnly) {
-        if (Utils.invokeMenuItem(MainWindowManager.mainWindowManager().getMainWindow(), new String[] {"File", "Restart..."})) {
+    void restart(final boolean pauseOnly) throws TimeoutException {
+        if (Utils.invokeMenuItem(MainWindowManager.mainWindowManager().getMainWindow(), new String[] {"File", "Restart..."}, MENU_TIMEOUT_MILLIS)) {
             mChannel.close();
+            releaseIfRestartDoesNotStart();
             return;
         }
         
@@ -139,6 +157,23 @@ class RestartTask
         window.setGlassPane(countdown);
         countdown.setVisible(true);
     }    
+
+    // Clicking File > Restart doesn't guarantee a restart: TWS's confirmation dialog can be
+    // closed before it's answered (eg when the Global Configuration dialog, still open from
+    // IBC's startup settings, closes and takes it with it). Without this, every later RESTART
+    // would be rejected as already in progress until IBC itself is restarted.
+    private void releaseIfRestartDoesNotStart() {
+        Thread checker = new Thread(() -> {
+            Utils.pause(RESTART_START_TIMEOUT_MILLIS);
+            if (ShutdownWatchdog.isArmed()) return;
+            Utils.logError(mVerb + ": TWS hasn't started restarting " + RESTART_START_TIMEOUT_MILLIS / 1000 +
+                    " seconds after File > Restart was clicked, so another " + mVerb + " will be accepted");
+            if (mPauseOnly) pauseFlagFile().delete();
+            _Running.clear();
+        }, "IBC-RestartChecker");
+        checker.setDaemon(true);
+        checker.start();
+    }
 
     private void writeAck(String message) {if (mChannel != null) mChannel.writeAck(message);}
     private void writeInfo(String message) {if (mChannel != null) mChannel.writeInfo(message);}

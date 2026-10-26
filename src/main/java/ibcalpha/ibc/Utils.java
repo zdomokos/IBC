@@ -24,6 +24,9 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import javax.swing.JDialog;
 import javax.swing.JMenuItem;
 import javax.swing.JTree;
@@ -57,9 +60,31 @@ class Utils {
      * the method has been called on the Swing event dispatch thread
      */
     static boolean invokeMenuItem(final Container container, final String[] path) throws IllegalStateException {
+        try {
+            return invokeMenuItem(container, path, 0);
+        } catch (TimeoutException e) {
+            throw new IllegalStateException(e); // can't happen without a timeout
+        }
+    }
+
+    /**
+     * As {@link #invokeMenuItem(Container, String[])}, but gives up if the menu item hasn't been
+     * clicked within timeoutMillis, for example because the event dispatch thread is blocked.
+     * @param timeoutMillis
+     * the time limit; 0 means no limit
+     * @throws TimeoutException
+     * the menu item wasn't clicked within timeoutMillis
+     */
+    static boolean invokeMenuItem(final Container container, final String[] path, final long timeoutMillis) throws IllegalStateException, TimeoutException {
         if (SwingUtilities.isEventDispatchThread()) throw new IllegalStateException("Function must not be called on the event dispatch thread, as it may block the thread");
+        final long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
         while (true) {
+            // set by whichever runs first: the task, which then clicks the menu item, or the
+            // caller giving up after a timeout, which stops the task from clicking it later
+            final AtomicBoolean claimed = new AtomicBoolean();
             FutureTask<Boolean> task = new FutureTask<>(() -> {
+                if (!claimed.compareAndSet(false, true)) return false;
+
                 String s = path[0];
                 for (int i = 1; i < path.length; i++) s = s + " > " + path[i];
 
@@ -72,8 +97,16 @@ class Utils {
 
             GuiDeferredExecutor.instance().execute(task);
 
+            boolean clicked = false;
             try {
-                if (task.get()) return true;
+                clicked = timeoutMillis <= 0
+                        ? task.get()
+                        : task.get(Math.max(0, deadline - System.nanoTime()), TimeUnit.NANOSECONDS);
+            } catch (TimeoutException e) {
+                // the task has started on the event dispatch thread, so the item is being
+                // clicked (doClick doesn't return while a modal dialog it opened is showing)
+                if (!claimed.compareAndSet(false, true)) return true;
+                throw menuItemTimeout(path, timeoutMillis);
             } catch (InterruptedException e) {
                 logError("invokeMenuItem task interrupted");
                 return false;
@@ -85,9 +118,16 @@ class Utils {
                 if (t instanceof RuntimeException) throw (RuntimeException)t;
                 if (t instanceof Error) throw (Error)t;
             }
+            if (clicked) return true;
+            if (timeoutMillis > 0 && deadline - System.nanoTime() <= 0) throw menuItemTimeout(path, timeoutMillis);
 
             pause(250);
         }
+    }
+
+    private static TimeoutException menuItemTimeout(final String[] path, final long timeoutMillis) {
+        return new TimeoutException("menu item " + String.join(" > ", path) + " not clicked within " +
+                timeoutMillis + " ms: the Swing event dispatch thread may be blocked");
     }
 
     static void exitWithError(int errorCode) {
