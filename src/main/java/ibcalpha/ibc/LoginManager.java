@@ -80,6 +80,7 @@ public abstract class LoginManager {
     public void setLoginState(LoginState state) {
         if (state == loginState) return;
         loginState = state;
+        HubAlerter.loginStateChanged(state);
         if (null != loginState) switch (loginState) {
             case TWO_FA_IN_PROGRESS:
                 Utils.logToConsole("Second Factor Authentication initiated");

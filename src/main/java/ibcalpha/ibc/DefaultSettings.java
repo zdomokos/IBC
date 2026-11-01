@@ -74,7 +74,8 @@ public class DefaultSettings extends Settings {
                 key.equalsIgnoreCase("FIXPassword") ||
                 key.equalsIgnoreCase("IbLoginId") ||
                 key.equalsIgnoreCase("IbPassword") ||
-                key.equalsIgnoreCase("RestToken")) {
+                key.equalsIgnoreCase("RestToken") ||
+                key.equalsIgnoreCase("LoraqHubKey")) {
             if (!value.isEmpty()) {
                 return "***";
             }

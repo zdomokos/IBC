@@ -337,6 +337,22 @@ it close down. For `ibc.ps1` to then start IBC again, set the launcher setting
 `On2FATimeout=restart`. If something else already restarts IBC (such as a scheduled task that
 repeats), leave it at `exit`, so that the two don't both start it.
 
+### Login alerts on a Loraq hub
+
+So that you know when an approval is needed (for example after a cold restart or a crash), IBC
+can raise a Critical alert on a Loraq hub while TWS is waiting for a login, and clear it when the
+login has completed. Set these in the live account's configuration file:
+
+```
+LoraqHubUrl=http://ztg-pod1:8081
+LoraqHubKey=<the hub's Alerting/IngestKey, if it has one>
+```
+
+A warm auto-restart doesn't need a login, so it raises nothing. While the login is waiting, IBC
+restates the alert every minute. If IBC stops for good before the login completes, the hub marks
+the alert stale after a few minutes and closes it after its `StaleGraceMinutes` (30 by default).
+The alert's id is `ibc/<trading mode>/Login`; `LoraqHubSourceId` changes the `ibc/live` part.
+
 ## 10. Several accounts
 
 You can run several TWS instances at the same time, for example your live and paper-trading
