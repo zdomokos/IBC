@@ -299,7 +299,20 @@ happen. A scheduled task that runs every few minutes can start it again (see *Sc
 
 If the Java VM itself crashes (it leaves an `hs_err_pid*.log` in the settings folder), `ibc.ps1`
 restarts IBC after 10 seconds. There is no `autorestart` file then, so you have to log in again.
-It gives up after more than 3 crashes in 30 minutes.
+After more than 3 crashes in 30 minutes it waits 15 minutes before trying again (and raises the
+hub alert, see *Login alerts on a Loraq hub*).
+
+**If TWS doesn't come back after an auto-restart.** If neither TWS's main window nor its login
+dialog has appeared `RestartTimeout` seconds (default 300) after an auto-restart, IBC exits with
+code 1116 and `ibc.ps1` starts TWS again: once more without a login, then with a full login.
+
+**If there's no desktop.** TWS needs a desktop for its windows. On a computer used over Remote
+Desktop, a disconnected session has no display, so Java starts without one and TWS can't create
+any window. IBC then exits with code 1115 instead of waiting, and `ibc.ps1` tries again every
+minute until the desktop is back. To keep TWS running while you're away, don't just close the
+Remote Desktop window: move the session to the console first (as administrator,
+`tscon <session id> /dest:console`; `query user` shows the id), or attach a display (or a dummy
+display plug).
 
 **If the restart hangs.** Occasionally TWS's Java VM doesn't finish exiting during the restart.
 For example, TWS 10.50 on Java 25 has deadlocked in its own exit code. TWS's window is gone, but
@@ -349,7 +362,12 @@ LoraqHubKey=<the hub's Alerting/IngestKey, if it has one>
 ```
 
 A warm auto-restart doesn't need a login, so it raises nothing. While the login is waiting, IBC
-restates the alert every minute. If IBC stops for good before the login completes, the hub marks
+restates the alert every minute.
+
+The same alert is raised when TWS can't start: there's no desktop for its windows (each retry,
+every minute, restates it), the login dialog or, after an auto-restart, the main window doesn't
+appear in time, the Java VM keeps crashing (restated while `ibc.ps1` waits before trying again),
+or IBC stops with an error (restated while its window stays open). It's cleared when TWS logs in. If IBC stops for good before the login completes, the hub marks
 the alert stale after a few minutes and closes it after its `StaleGraceMinutes` (30 by default).
 The alert's id is `ibc/<trading mode>/Login`; `LoraqHubSourceId` changes the `ibc/live` part.
 
@@ -575,6 +593,9 @@ something fails it shows the error and an exit code.
 | 1107 | IBC.jar couldn't find TWS's classes: the TWS installation is incomplete |
 | 1111 | the IBKR Mobile alert wasn't approved in time and IBC was set to exit (see *Second factor authentication*) |
 | 1112 | the TWS login dialog didn't appear in time; IBC starts again |
+| 1113, 1114 | TWS's shutdown or auto-restart hung and IBC ended the Java VM (see *Keeping TWS running all week*) |
+| 1115 | there's no desktop for TWS's windows (eg a disconnected Remote Desktop session); IBC tries again every minute |
+| 1116 | TWS didn't start within `RestartTimeout` of an auto-restart; IBC starts again |
 
 Other common problems:
 

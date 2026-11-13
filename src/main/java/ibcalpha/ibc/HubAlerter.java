@@ -42,6 +42,9 @@ import java.util.concurrent.TimeUnit;
  * raised by the next Java VM (after a 2FA timeout or a crash) continues the same one; the
  * sequence number is the wall clock, so it keeps increasing across Java VMs.
  * <p>
+ * The same alert is raised when TWS can't start at all ({@link #raiseAndExit}): no desktop for
+ * its windows, the login dialog or the main window not appearing.
+ * <p>
  * Settings: LoraqHubUrl (empty = off), LoraqHubKey (X-Ztg-Alert-Key header), LoraqHubSourceId
  * (default ibc/&lt;trading mode&gt;).
  * <p>
@@ -90,6 +93,28 @@ final class HubAlerter {
         } catch (Throwable e) {
             Utils.logError("HubAlerter: " + e);
         }
+    }
+
+    /**
+     * Raises (or restates) the alert, waits a short while for the hub to receive it, and then ends
+     * the Java VM with {@code errorCode}. For a start that can't succeed (no desktop, a restart
+     * that never shows TWS): the next Java VM that {@code ibc.ps1} starts restates the alert, and
+     * the one that logs in clears it.
+     */
+    static void raiseAndExit(final int errorCode, final String text) {
+        Utils.logError(text);
+        try {
+            EXECUTOR.submit(() -> {
+                if (!enabled()) return;
+                description = text;
+                if (raisedAt == null) raisedAt = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+                Utils.logToConsole("HubAlerter: raising the login alert before exiting");
+                post(open ? KIND_UPDATE : KIND_RAISE);
+            }).get(3 * TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
+        } catch (Throwable e) {
+            Utils.logError("HubAlerter: " + e);
+        }
+        Utils.exitWithError(errorCode);
     }
 
     private static boolean enabled() {

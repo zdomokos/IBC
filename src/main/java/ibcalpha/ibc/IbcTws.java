@@ -19,6 +19,7 @@
 package ibcalpha.ibc;
 
 import java.awt.AWTEvent;
+import java.awt.GraphicsEnvironment;
 import java.awt.Toolkit;
 import java.io.File;
 import java.io.IOException;
@@ -274,6 +275,8 @@ public class IbcTws {
             TradingModeManager.tradingModeManager().logDiagnosticMessage();
             ConfigDialogManager.configDialogManager().logDiagnosticMessage();
 
+            exitIfNoDesktop();
+
             startCommandServer();
 
             startRestServer();
@@ -300,6 +303,19 @@ public class IbcTws {
     public static void printVersionInfo() {
         Utils.logToConsole("version: " + IbcVersionInfo.IBC_VERSION);
         Utils.logToConsole("Java VM process id: " + ProcessHandle.current().pid());
+    }
+
+    /*
+     * Java starts headless when there's no display, for example on Windows when the Remote
+     * Desktop session is disconnected. TWS then fails to create any window and never starts,
+     * while this Java VM would run on with nothing to show. So exit instead: ibc.ps1 tries
+     * again a minute later, and each attempt restates the hub alert.
+     */
+    private static void exitIfNoDesktop() {
+        if (!GraphicsEnvironment.isHeadless()) return;
+        HubAlerter.raiseAndExit(ErrorCodes.NO_DESKTOP,
+                (SessionManager.isGateway() ? "Gateway" : "TWS") + " can't start: there is no desktop for its windows " +
+                "(is the Remote Desktop session disconnected, or is no display attached?). IBC tries again every minute.");
     }
 
     private static void createToolkitListener() {

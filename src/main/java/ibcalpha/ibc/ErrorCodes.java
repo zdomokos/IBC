@@ -35,4 +35,6 @@ public final class ErrorCodes {
     public static final int LOGIN_DIALOG_DISPLAY_TIMED_OUT = 1112;
     public static final int SHUTDOWN_HUNG = 1113;
     public static final int RESTART_HUNG = 1114;
+    public static final int NO_DESKTOP = 1115;
+    public static final int RESTART_TIMED_OUT = 1116;
 }

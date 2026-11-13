@@ -313,6 +313,13 @@ $E_LOGIN_DIALOG_DISPLAY_TIMEOUT = 1112
 $E_SHUTDOWN_HUNG = 1113
 $E_RESTART_HUNG = 1114
 
+# exit code set by IBC if Java has no desktop for TWS's windows (eg the Remote
+# Desktop session is disconnected), so TWS can't start
+$E_NO_DESKTOP = 1115
+
+# exit code set by IBC if TWS doesn't start within RestartTimeout of an auto-restart
+$E_RESTART_TIMED_OUT = 1116
+
 $app = $Gateway ? 'Gateway' : 'TWS'
 $ibcPath = $PSScriptRoot
 
@@ -344,6 +351,64 @@ function Write-Banner([string]$Text = '') {
     Write-Host "+ $Text"
 }
 
+# Raises (or restates) on a Loraq hub the same Critical alert that IBC raises while TWS
+# waits for a login (see HubAlerter.java), for the cases only this script sees: TWS keeps
+# crashing, or IBC has stopped with an error. Off unless LoraqHubUrl is set. Best effort:
+# a failure is logged, never thrown. The hub marks an alert stale unless it's restated
+# every few minutes, so callers that wait restate it every minute.
+$script:hubAlertSetAt = $null
+function Send-HubAlert([string]$Description) {
+    try {
+        $url = $settings ? "$($settings['LoraqHubUrl'])".Trim().TrimEnd('/') : ''
+        if (-not $url) { return }
+        $mode = $settings['TradingMode'] ? $settings['TradingMode'].Trim().ToLowerInvariant() : 'live'
+        $sourceId = $settings['LoraqHubSourceId'] ? $settings['LoraqHubSourceId'].Trim() : "ibc/$mode"
+        $alertId = "$sourceId/Login"
+        $now = [DateTimeOffset]::UtcNow
+        $at = $now.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", [cultureinfo]::InvariantCulture)
+        $kind = $script:hubAlertSetAt ? 1 : 0
+        if (-not $script:hubAlertSetAt) { $script:hubAlertSetAt = $at }
+        $body = ConvertTo-Json -Depth 5 -Compress -InputObject @([ordered]@{
+            kind        = $kind
+            alertId     = $alertId
+            sourceId    = $sourceId
+            seq         = $now.ToUnixTimeMilliseconds()
+            at          = $at
+            clearedAt   = $null
+            clearReason = $null
+            price       = $null
+            alert       = [ordered]@{
+                alertId     = $alertId
+                system      = 'IBC'
+                source      = $env:COMPUTERNAME
+                subsystem   = $app
+                component   = $mode
+                level       = 4
+                title       = "IB $mode is not logged in"
+                description = $Description
+                alertSetAt  = $script:hubAlertSetAt
+                tags        = @('ibc', 'login')
+            }
+        })
+        $headers = @{}
+        if ($settings['LoraqHubKey']) { $headers['X-Ztg-Alert-Key'] = $settings['LoraqHubKey'].Trim() }
+        Invoke-RestMethod -Uri "$url/api/alerts" -Method Post -ContentType 'application/json' -Headers $headers `
+            -Body $body -TimeoutSec 10 -ErrorAction Stop | Out-Null
+        if ($kind -eq 0) { Write-Log "Raised the login alert on $url" }
+    } catch {
+        Write-Log "Can't send the login alert to the hub: $($_.Exception.Message)"
+    }
+}
+
+# Waits, restating the hub alert every minute
+function Wait-WithHubAlert([int]$Seconds, [string]$Description) {
+    $until = (Get-Date).AddSeconds($Seconds)
+    while ((Get-Date) -lt $until) {
+        Send-HubAlert $Description
+        Start-Sleep -Seconds ([Math]::Min(60, [Math]::Max(1, ($until - (Get-Date)).TotalSeconds)))
+    }
+}
+
 # offline installs go in <TwsPath>\<version> (TWS) or <TwsPath>\ibgateway\<version>
 function Find-NewestVersion([string[]]$Folders) {
     $Folders | Where-Object { Test-Path -LiteralPath $_ } |
@@ -361,6 +426,7 @@ if ($InWindow) {
 
 $phase = 'Reading the configuration file'
 $exitCode = 0
+$failureAlert = $null
 
 try {
     if (-not $settings) {
@@ -673,8 +739,11 @@ try {
     # prevent other Java tools interfering with IBC
     $env:JAVA_TOOL_OPTIONS = $null
 
-    # times of recent JVM crashes, to stop a crash loop
+    # times of recent JVM crashes, to slow down a crash loop
     $crashTimes = [System.Collections.Generic.List[datetime]]::new()
+
+    # consecutive auto-restarts that didn't start TWS
+    $restartTimeouts = 0
 
     Push-Location -LiteralPath $twsSettingsPath
     try {
@@ -746,6 +815,30 @@ try {
                 continue
             }
 
+            # IBC has raised the hub alert; each attempt restates it. Never give up: TWS
+            # starts as soon as there's a desktop again
+            if ($exitCode -eq $E_NO_DESKTOP) {
+                Write-Log "There's no desktop for $app's windows (is the Remote Desktop session disconnected?): IBC will try again in 60 seconds"
+                Start-Sleep -Seconds 60
+                $autoRestartOption = (Get-AutoRestartOption).Option
+                continue
+            }
+
+            # try the auto-restart once more, then fall back to a full login (which raises
+            # the login alert)
+            $restartTimeouts = ($exitCode -eq $E_RESTART_TIMED_OUT) ? $restartTimeouts + 1 : 0
+            if ($exitCode -eq $E_RESTART_TIMED_OUT) {
+                if ($restartTimeouts -ge 2) {
+                    Write-Log "$app did not start after an auto-restart again: IBC will restart shortly (full authentication will be required)"
+                    $autoRestartOption = $null
+                } else {
+                    Write-Log "$app did not start after an auto-restart: IBC will restart shortly"
+                    $autoRestartOption = (Get-AutoRestartOption).Option
+                }
+                Start-Sleep -Seconds 10
+                continue
+            }
+
             # A JVM crash (eg an access violation in awt.dll when the display configuration
             # changes) exits with code 1, the same as a killed process, but leaves an
             # hs_err_pid*.log in the working folder. Restart rather than leave TWS gone.
@@ -780,8 +873,9 @@ try {
                 $crashTimes.RemoveAll({ param($t) ($now - $t).TotalMinutes -gt 30 }) | Out-Null
                 $crashTimes.Add($now)
                 if ($crashTimes.Count -gt 3) {
-                    Write-Log 'The Java VM has crashed or hung more than 3 times in 30 minutes, so IBC will not be restarted'
-                    break
+                    Write-Log 'The Java VM has crashed or hung more than 3 times in 30 minutes: IBC will try again in 15 minutes'
+                    Wait-WithHubAlert 900 "$appDesc keeps crashing: the Java VM crashed or hung more than 3 times in 30 minutes. IBC tries again every 15 minutes; see the IBC log."
+                    $crashTimes.Clear()
                 }
                 Write-Log 'IBC will restart shortly (full authentication will be required)'
                 Start-Sleep -Seconds 10
@@ -848,15 +942,27 @@ try {
     Write-Banner
     Write-Host ('+' + '=' * 78)
 
+    $failureAlert = "IBC has stopped with an error, so $app is not running: $($err.Message) (exit code $exitCode, see the IBC log)."
+    Send-HubAlert $failureAlert
+
 } finally {
     if ($script:logWriter) { $script:logWriter.Dispose() }
+    $script:logWriter = $null
 }
 
 # keep IBC's own window open so the error can be read (after closing the log, so
-# it can be opened or deleted meanwhile)
+# it can be opened or deleted meanwhile). Until then the hub alert is restated
 if ($exitCode -ne 0 -and $InWindow) {
     Write-Banner
     Write-Banner 'Press any key to close this window'
+    $restateAt = (Get-Date).AddMinutes(1)
+    while (-not [Console]::KeyAvailable) {
+        Start-Sleep -Milliseconds 250
+        if ($failureAlert -and (Get-Date) -ge $restateAt) {
+            Send-HubAlert $failureAlert
+            $restateAt = (Get-Date).AddMinutes(1)
+        }
+    }
     [void][Console]::ReadKey($true)
 }
 

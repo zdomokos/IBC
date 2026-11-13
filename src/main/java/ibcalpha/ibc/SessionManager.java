@@ -59,22 +59,33 @@ public class SessionManager {
         
         // test to see if the -Drestart VM option has been supplied
         _isRestart = ! (System.getProperties().getProperty("restart", "").isEmpty());
-        int loginDialogDisplayTimeout = Settings.settings().getInt("LoginDialogDisplayTimeout", 60);
+        String app = _isGateway ? "Gateway" : "TWS";
         if (_isRestart){
-            Utils.logToConsole("Re-starting session");
-            // TWS/Gateway will re-establish the session with no intervention from IBC needed
+            // TWS/Gateway will re-establish the session with no intervention from IBC needed,
+            // so it must reach its main window (or, if it decides it needs a login after all,
+            // its login dialog) in time
+            int restartTimeout = Settings.settings().getInt("RestartTimeout", 300);
+            Utils.logToConsole("Re-starting session: will exit if " + app + " has not started within " + restartTimeout + " seconds");
+            exitIfStillLoggedOut(restartTimeout, ErrorCodes.RESTART_TIMED_OUT,
+                    app + " did not start within " + restartTimeout + " seconds of an auto-restart. IBC is starting it again.");
         } else {
+            int loginDialogDisplayTimeout = Settings.settings().getInt("LoginDialogDisplayTimeout", 60);
             Utils.logToConsole("Starting session: will exit if login dialog is not displayed within " + loginDialogDisplayTimeout + " seconds");
-            MyScheduledExecutorService.getInstance().schedule(()->{
-                GuiExecutor.instance().execute(()->{
-                    if (LoginManager.loginManager().getLoginState() != LoginManager.LoginState.LOGGED_OUT) {
-                        // Login diaog has been shown - no need for IBC to exit
-                        return;
-                    }
-                    Utils.exitWithError(ErrorCodes.LOGIN_DIALOG_DISPLAY_TIMED_OUT, "IBC closing after TWS/Gateway failed to display login dialog");
-                });
-            }, loginDialogDisplayTimeout, TimeUnit.SECONDS);
+            exitIfStillLoggedOut(loginDialogDisplayTimeout, ErrorCodes.LOGIN_DIALOG_DISPLAY_TIMED_OUT,
+                    app + " did not display its login dialog within " + loginDialogDisplayTimeout + " seconds. IBC is starting it again.");
         }
+    }
+
+    /*
+     * LOGGED_OUT is the state until the login dialog or the main window appears. The check runs
+     * on a pool thread rather than the event dispatch thread, so that it still works if TWS has
+     * blocked that thread.
+     */
+    private static void exitIfStillLoggedOut(int timeoutSeconds, int errorCode, String message) {
+        MyScheduledExecutorService.getInstance().schedule(() -> {
+            if (LoginManager.loginManager().getLoginState() != LoginManager.LoginState.LOGGED_OUT) return;
+            HubAlerter.raiseAndExit(errorCode, message);
+        }, timeoutSeconds, TimeUnit.SECONDS);
     }
     
     private static volatile boolean _InitialisationCompleted;
